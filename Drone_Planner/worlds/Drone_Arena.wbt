@@ -9,8 +9,8 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/project
 WorldInfo {
 }
 Viewpoint {
-  orientation 0.22380761058649035 -0.2541569286535023 -0.9409114778027656 4.778586805099026
-  position -5.3285318528717385 -15.319882542581778 6.225925071235745
+  orientation 0.5096434157710774 -0.5905515442952733 -0.625709567045012 4.3962607850437365
+  position -0.8847167785612673 -2.1316923069099403 20.0178194020482
 }
 TexturedBackground {
 }
@@ -20,54 +20,79 @@ RectangleArena {
   floorSize 16 16
 }
 DEF OBSTACLE Wall {
-  translation 2.72 -6.49 0
-  name "OBSTACLE"
-  size 0.2 3 4
-}
-DEF OBSTACLE Wall {
-  translation -6.03771 -1.34755 -4.1058e-14
+  translation -1.66117 4.56901 2.84368e-13
   rotation 0 0 1 1.5708
   name "OBSTACLE(1)"
-  size 0.2 5 4
+  size 2 2 4
 }
 DEF OBSTACLE Wall {
-  translation 1.51633 0.7564 2.01905e-13
-  rotation 0 0 1 2.0944
-  name "OBSTACLE(2)"
-  size 0.2 9 4
-}
-DEF OBSTACLE Wall {
-  translation 1.50791 3.12718 2.72531e-13
+  translation -4.4187 -3.91585 3.8233e-13
   rotation 0 0 1 1.5708
-  name "OBSTACLE(4)"
-  size 0.2 8 4
-}
-DEF OBSTACLE Wall {
-  translation -3.63238 1.04586 -1.45431e-16
-  rotation 0 0 -1 -5.307179586466759e-06
   name "OBSTACLE(3)"
-  size 0.2 5 4
+  size 2 2 4
 }
 DEF OBSTACLE Wall {
-  translation -2.39336 0.837019 4.7929e-14
-  rotation 0 0 -1 -5.307179586466759e-06
-  name "OBSTACLE(8)"
-  size 0.2 5 4
+  translation 0.408015 -5.99985 3.83465e-13
+  rotation 0 0 1 1.5708
+  name "OBSTACLE(11)"
+  size 2 2 4
 }
 DEF OBSTACLE Wall {
-  translation -3.63238 1.04586 -1.45431e-16
-  rotation 0 0 -1 -5.307179586466759e-06
-  name "OBSTACLE(7)"
-  size 0.2 5 4
-}
-DEF OBSTACLE Wall {
-  translation -6.08887 3.44637 -1.12889e-14
+  translation -5.36846 1.2284 2.50265e-13
   rotation 0 0 1 1.5708
   name "OBSTACLE(6)"
-  size 0.2 5 4
+  size 2 2 4
+}
+DEF OBSTACLE Wall {
+  translation 0.632872 1.17946 2.43849e-13
+  rotation 0 0 1 1.5708
+  name "OBSTACLE(4)"
+  size 2 2 4
+}
+DEF OBSTACLE Wall {
+  translation 2.35424 -2.09014 2.16889e-13
+  rotation 0 0 1 1.5708
+  name "OBSTACLE(9)"
+  size 2 2 4
+}
+DEF OBSTACLE Wall {
+  translation 4.56095 -4.96695 2.46685e-13
+  rotation 0 0 1 1.5708
+  name "OBSTACLE(12)"
+  size 2 2 4
+}
+DEF OBSTACLE Wall {
+  translation -2.48576 1.26253 1.73321e-13
+  rotation 0 0 1 1.5708
+  name "OBSTACLE(8)"
+  size 2 2 4
+}
+DEF OBSTACLE Wall {
+  translation 4.58689 0.242928 2.49729e-13
+  rotation 0 0 1 1.5708
+  name "OBSTACLE(5)"
+  size 2 2 4
+}
+DEF OBSTACLE Wall {
+  translation 1.83374 4.37937 3.56853e-13
+  rotation 0 0 1 1.5708
+  name "OBSTACLE(2)"
+  size 2 2 4
+}
+DEF OBSTACLE Wall {
+  translation 4.66373 3.25234 3.93499e-13
+  rotation 0 0 1 1.5708
+  name "OBSTACLE(10)"
+  size 2 2 4
+}
+DEF OBSTACLE Wall {
+  translation -1.69084 -2.70399 2.96412e-13
+  rotation 0 0 1 1.5708
+  name "OBSTACLE(7)"
+  size 2 2 4
 }
 DEF TARGET Solid {
-  translation -6.21487 6.66231 -8.40688e-14
+  translation 6.59043 6.40059 -1.84156e-14
   rotation 0 0 1 1.6057
   children [
     Shape {
@@ -84,14 +109,17 @@ DEF TARGET Solid {
   name "GOAL_POINT"
 }
 Mavic2Pro {
+  hidden position_0_0 -1.0770856053602253e-08
   hidden translation_5 0.0412774 -0.00469654 -0.00405862
   hidden rotation_5 0 0 1 0
+  hidden position_5_0 2.4912850705071984e-08
   hidden translation_6 0.000625212 -0.00530346 -0.0207448
   hidden rotation_6 0 -1 0 2.9802322387695313e-08
+  hidden position_6_0 9.578265725487997e-09
   hidden translation_7 0.00754686 0.0160388 -0.00586401
   hidden rotation_7 1 0 0 0
-  translation -6.68559 -6.22832 0.0655725
-  rotation 0.03503724790007934 -0.026763601011648472 0.9990275776576328 1.8377862072477271
+  translation -6.685589961354779 -6.228320056478246 0.06557267222154471
+  rotation 0.035037868907072944 -0.026763805558424565 0.9990275503981269 1.8377862216796905
   controller "drone_supervisor"
   supervisor TRUE
 }
