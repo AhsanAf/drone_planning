@@ -1,22 +1,59 @@
-# Rapidly-exploring Random Tree (RRT) Pada Drone Mavic2Pro
 
+## PANDUAN INSTALASI & CARA MENJALANKAN PROGRAM
 
+Ikuti langkah-langkah di bawah ini secara berurutan untuk menyiapkan 
+program di komputer.
 
-## Prasyarat
+-----------------
+## 1. PERSIAPAN AWAL
 
-Pastikan sistem telah memenuhi prasyarat berikut sebelum melakukan instalasi:
-* [Python 3.14](https://www.python.org/downloads/) (Disarankan versi stabil terbaru)
-* `pip` (Biasanya sudah termasuk dalam instalasi Python)
-* Git
+Pastikan komputer sudah memiliki Python 3.14.
+- Download di: https://www.python.org/downloads/
 
-## Petunjuk Instalasi
+------------------------------------
+## 2. CARA INSTALASI VIRTUAL ENVIRONMENTS
 
-Langkah-langkah berikut akan memandu Anda untuk mengatur lingkungan pengembangan lokal yang terisolasi menggunakan `venv`.
+Buka folder program ini, lalu buka Terminal (Mac/Linux) atau 
+Command Prompt/PowerShell (Windows). Ketik perintah berikut:
 
-### 1. Clone Repositori
+A. Buat Ruang Kerja Khusus (Virtual Environment)
+   Ketik perintah ini dan tekan Enter:
+   
+   Windows:
+   ```python -m venv .venv```
+   
+   Mac/Linux:
+   ```python3 -m venv .venv```
 
-Unduh repositori ini ke dalam file yang sudah disiapkan
+B. Aktifkan Ruang Kerja
+   Setelah dibuat, kita harus "masuk" ke dalamnya:
 
-```bash
-git clone [https://github.com/username/nama-repositori.git](https://github.com/username/nama-repositori.git)
-cd nama-repositori
+   Windows (Command Prompt):
+   ```.venv\Scripts\activate```
+
+   Mac/Linux:
+   ```source .venv/bin/activate```
+
+   TANDA BERHASIL: Muncul tulisan (.venv) di baris ketikan Anda.
+
+C. Instal Bahan-Bahan (Library)
+   Pastikan (.venv) sudah aktif, lalu ketik:
+   
+   ```pip install -r requirements.txt```
+   
+------------------------------------
+## 3. CARA MENJALANKAN PROGRAM
+
+Setelah instalasi selesai, jalankan program dengan perintah:
+
+```python drone_gui.py```
+
+---------------------------
+
+## 4. CARA BERHENTI/KELUAR
+
+Jika sudah selesai, cukup ketik:
+
+```deactivate```
+
+-----------------------
