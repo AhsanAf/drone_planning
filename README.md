@@ -20,33 +20,45 @@ A. Buat Ruang Kerja Khusus (Virtual Environment)
    Ketik perintah ini dan tekan Enter:
    
    Windows:
-   ```python -m venv .venv```
+   ``` bash 
+   python -m venv .venv
+```
    
    Mac/Linux:
-   ```python3 -m venv .venv```
+   ``` bash
+python3 -m venv .venv
+   ```
 
 B. Aktifkan Ruang Kerja
    Setelah dibuat, kita harus "masuk" ke dalamnya:
 
    Windows (Command Prompt):
-   ```.venv\Scripts\activate```
+   ``` bash
+   .venv\Scripts\activate
+```
 
    Mac/Linux:
-   ```source .venv/bin/activate```
+   ``` bash
+   source .venv/bin/activate
+```
 
    TANDA BERHASIL: Muncul tulisan (.venv) di baris ketikan Anda.
 
 C. Instal Bahan-Bahan (Library)
    Pastikan (.venv) sudah aktif, lalu ketik:
    
-   ```pip install -r requirements.txt```
+   ``` bash
+   pip install -r requirements.txt
+```
    
 ------------------------------------
 ## 3. CARA MENJALANKAN PROGRAM
 
 Setelah instalasi selesai, jalankan program dengan perintah:
 
-```python drone_gui.py```
+``` bash
+python drone_gui.py
+```
 
 ---------------------------
 
@@ -54,6 +66,8 @@ Setelah instalasi selesai, jalankan program dengan perintah:
 
 Jika sudah selesai, cukup ketik:
 
-```deactivate```
+```bash
+deactivate
+```
 
 -----------------------
