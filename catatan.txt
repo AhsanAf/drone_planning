@@ -4,7 +4,7 @@ fungsi : drone yang nantinya sudah ada pid dan fisika diharapkan bisa terbang de
 
 edit bagian world info
 WorldInfo {
-  basicTimeStep 8
+  basicTimeStep 8 (rekomendasi dari forum)
   defaultDamping Damping {
     linear 0.5
     angular 0.5
