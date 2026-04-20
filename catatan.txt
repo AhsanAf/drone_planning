@@ -6,7 +6,7 @@ edit bagian world info
 WorldInfo {
   basicTimeStep 8 (rekomendasi dari forum)
   defaultDamping Damping {
-    linear 0.5
+    linear 0.5 (rekomendasi AI)
     angular 0.5
   }
 }
