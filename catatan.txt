@@ -1,0 +1,18 @@
+20/4/2026
+penambahan file drone_supervisor_pt2
+fungsi : drone yang nantinya sudah ada pid dan fisika diharapkan bisa terbang dengan normal
+
+edit bagian world info
+WorldInfo {
+  basicTimeStep 8
+  defaultDamping Damping {
+    linear 0.5
+    angular 0.5
+  }
+}
+hasil : Masih error di bagian pid
+
+tambahkan pip PID
+pip install simple_pid
+hasil : command berjalan tetapi gui tidak menerima traceback dari drone_supervisor
+
