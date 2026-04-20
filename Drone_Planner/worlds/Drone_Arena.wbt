@@ -7,6 +7,11 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/project
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/dji/mavic/protos/Mavic2Pro.proto"
 
 WorldInfo {
+  basicTimeStep 8
+  defaultDamping Damping {
+    linear 0.5
+    angular 0.5
+  }
 }
 Viewpoint {
   orientation 0.5096434157710774 -0.5905515442952733 -0.625709567045012 4.3962607850437365
@@ -110,14 +115,9 @@ DEF TARGET Solid {
 }
 Mavic2Pro {
   hidden position_0_0 -1.0770856053602253e-08
-  hidden translation_5 0.0412774 -0.00469654 -0.00405862
-  hidden rotation_5 0 0 1 0
   hidden position_5_0 2.4912850705071984e-08
-  hidden translation_6 0.000625212 -0.00530346 -0.0207448
-  hidden rotation_6 0 -1 0 2.9802322387695313e-08
+  hidden rotation_6 0 -1 0 4.2146848510894035e-08
   hidden position_6_0 9.578265725487997e-09
-  hidden translation_7 0.00754686 0.0160388 -0.00586401
-  hidden rotation_7 1 0 0 0
   translation -6.685589961354779 -6.228320056478246 0.06557267222154471
   rotation 0.035037868907072944 -0.026763805558424565 0.9990275503981269 1.8377862216796905
   controller "drone_supervisor"
