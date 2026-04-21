@@ -161,8 +161,8 @@ class DroneSupervisor(Supervisor):
                 # MOTOR MIXING (X configuration)
                 self.motors[0].setVelocity(thrust - roll_cmd + pitch_cmd + yaw_cmd)   # front left
                 self.motors[1].setVelocity(thrust + roll_cmd + pitch_cmd - yaw_cmd)   # front right
-                self.motors[2].setVelocity(thrust + roll_cmd - pitch_cmd + yaw_cmd)   # rear left
-                self.motors[3].setVelocity(thrust - roll_cmd - pitch_cmd - yaw_cmd)   # rear right
+                self.motors[2].setVelocity(thrust - roll_cmd - pitch_cmd - yaw_cmd)   # rear left
+                self.motors[3].setVelocity(thrust + roll_cmd - pitch_cmd + yaw_cmd)   # rear right
 
                 # Cek sampai waypoint
                 dist = math.hypot(error_x, error_y)
