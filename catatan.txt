@@ -22,3 +22,39 @@ update : dicoba dengan program bawaan webots mavic2pro dan bisa dikontrol dengan
 tidak seperti sebelumnya pada saat menggunakan device mac (masalah belum ditemukan)
 update : drone sudah bisa take off namun berputar tidak jelas dan terpental
 indikasi : kemungkinan setting PID yang kurang cocok
+try step by step
+1. Mencoba saat ada perintah run di gui maka drone akan terbang setinggi 2 meter
+hasil : saat drone mencoba terbang propeler kiri depan sepertinya tidak seimbang
+mengakibatkan drone berputar kekanan, 
+perbaikan : mencoba perbaiki arah putarnya propeler
+hasil drone berhasil take off dengan sempurna
+2. Mencoba tambahkan algortima drone mengikuti jalur path planning
+hasil : drone take off dengan normal mencapai ketinggiaan 2 meter tetapi tidak mengikuti
+jalur yang sudah ada dari gui
+perbaikan : mencoba perbaiki algortima path planning pada drone_supervisor_pt2
+hasil : masih stuck
+
+Report Progress
+✅ Masalah 1: Drone tidak seimbang, berputar, dan terpental saat take-off
+Penyebab:
+
+Arah putaran propeller tidak sesuai standar Webots (semua searah).
+
+Motor mixing salah (tanda negatif/positif tidak tepat).
+
+Take-off dengan thrust konstan tanpa ramp.
+
+Perbaikan:
+
+Mengikuti persis referensi C Webots:
+
+Motor front_right dan rear_left diberi kecepatan negatif.
+
+Menggunakan k_vertical_thrust = 68.5, vertical_input = k_vertical_p * (clamped_diff)^3.
+
+Thrust ramp dari 150 ke 280 (tapi di kode final menggunakan formula referensi C langsung).
+
+Hasil: Take-off stabil, tidak berputar.
+
+3. Penambahan program drone testing untuk cek apakah pergerakan berjalan dengan normal atau tidak
+hasil : drone bergerak dengan normal

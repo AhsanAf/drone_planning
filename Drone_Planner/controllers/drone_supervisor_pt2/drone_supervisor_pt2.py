@@ -3,32 +3,35 @@ import socket
 import json
 import math
 
-# ====================== PID MANUAL ======================
 class PID:
-    def __init__(self, Kp, Ki, Kd, setpoint=0.0):
+    def __init__(self, Kp, Ki, Kd):
         self.Kp = Kp
         self.Ki = Ki
         self.Kd = Kd
-        self.setpoint = setpoint
+        self.setpoint = 0.0
         self.integral = 0.0
         self.prev_error = 0.0
         self.dt = 0.008
 
+    def reset(self):
+        self.integral = 0.0
+        self.prev_error = 0.0
+
     def __call__(self, measurement):
         error = self.setpoint - measurement
         self.integral += error * self.dt
+        self.integral = max(-10, min(10, self.integral))
         derivative = (error - self.prev_error) / self.dt
         output = self.Kp * error + self.Ki * self.integral + self.Kd * derivative
         self.prev_error = error
         return output
 
-# ====================== SUPERVISOR ======================
 class DroneSupervisor(Supervisor):
     def __init__(self):
         super().__init__()
         self.timestep = int(self.getBasicTimeStep())
-        
-        # SOCKET
+
+        # Socket
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server.bind(('127.0.0.1', 65432))
@@ -37,17 +40,17 @@ class DroneSupervisor(Supervisor):
         self.conn = None
         print("✅ Supervisor siap. Menunggu GUI...")
 
-        # DEVICES
-        self.gps = self.getDevice("gps")
+        # Devices
         self.imu = self.getDevice("inertial unit")
+        self.gps = self.getDevice("gps")
         self.gyro = self.getDevice("gyro")
         self.compass = self.getDevice("compass")
-        self.gps.enable(self.timestep)
         self.imu.enable(self.timestep)
+        self.gps.enable(self.timestep)
         self.gyro.enable(self.timestep)
         self.compass.enable(self.timestep)
 
-        # MOTOR (nama resmi Mavic 2 Pro)
+        # Motors
         motor_names = ["front left propeller", "front right propeller",
                        "rear left propeller", "rear right propeller"]
         self.motors = []
@@ -57,29 +60,35 @@ class DroneSupervisor(Supervisor):
                 m.setPosition(float('inf'))
                 m.setVelocity(0)
                 self.motors.append(m)
-        print(f"✅ {len(self.motors)} propeller ditemukan!")
+        print(f"✅ {len(self.motors)} propeller ditemukan")
 
-        # PID
-        self.pid_roll  = PID(1.3, 0.1, 0.6)
-        self.pid_pitch = PID(1.3, 0.1, 0.6)
-        self.pid_yaw   = PID(0.9, 0.0, 0.5)
-        self.pid_alt   = PID(4.5, 0.8, 2.0, setpoint=3.0)   # lebih kuat
-        
-        # Outer loop position control
-        self.k_pos = 0.8   # gain posisi → sudut (rad)
+        # Constants
+        self.k_vertical_thrust = 68.5
+        self.k_vertical_offset = 0.6
+        self.k_vertical_p = 3.0
+        self.k_roll_p = 50.0
+        self.k_pitch_p = 30.0
+        self.target_altitude = 2.0
 
-        self.waypoints = []
+        # Waypoint navigation
+        self.waypoints = []          # list of [x, y, z]
         self.current_wp = 0
         self.flying = False
         self.takeoff_done = False
+        self.k_pos = 0.8             # gain posisi (halus)
+        self.wp_threshold = 0.5
+        self.decel_distance = 1.2
+        self.debug_counter = 0
+
+        # Yaw PID (untuk mempertahankan heading, tidak digunakan untuk navigasi waypoint)
+        self.yaw_pid = PID(0.8, 0.01, 0.1)
+        self.yaw_pid.setpoint = 0.0
 
     def get_map_data(self):
         drone_pos = self.getSelf().getPosition()
         start = [round(drone_pos[0], 3), round(drone_pos[1], 3)]
-        
         goal_node = self.getFromDef("TARGET")
         goal = [round(goal_node.getPosition()[0], 3), round(goal_node.getPosition()[1], 3)] if goal_node else [6.59, 6.40]
-        
         obstacles = []
         children = self.getRoot().getField("children")
         for i in range(children.getCount()):
@@ -91,21 +100,27 @@ class DroneSupervisor(Supervisor):
         return {"start": start, "goal": goal, "obstacles": obstacles}
 
     def follow_waypoints(self, path):
-        self.waypoints = [[p[0], p[1], 3.0] for p in path]  # target altitude 3m
+        # path: list of [x, y] dari GUI
+        self.waypoints = [[p[0], p[1], self.target_altitude] for p in path]
         self.current_wp = 0
         self.flying = True
         self.takeoff_done = False
-        print(f"🚀 Mulai terbang ke {len(self.waypoints)} waypoint")
+        print(f"🚀 Menerima {len(self.waypoints)} waypoint")
+        for i, wp in enumerate(self.waypoints[:5]):
+            print(f"   WP{i}: ({wp[0]:.2f}, {wp[1]:.2f})")
 
     def run(self):
         while self.step(self.timestep) != -1:
-            # SOCKET
+            # Socket handling
             if not self.conn:
                 try:
                     self.conn, addr = self.server.accept()
                     self.conn.setblocking(False)
                     print(f"✅ GUI terhubung dari {addr}")
-                except: pass
+                except BlockingIOError:
+                    pass
+                except:
+                    pass
             else:
                 try:
                     data = self.conn.recv(65536).decode()
@@ -120,58 +135,115 @@ class DroneSupervisor(Supervisor):
                         elif cmd == "RESET":
                             self.getSelf().getField("translation").setSFVec3f([-6.685, -6.228, 0.065])
                             self.waypoints = []
+                            self.current_wp = 0
                             self.flying = False
                             self.takeoff_done = False
-                            for m in self.motors: m.setVelocity(0)
+                            for m in self.motors:
+                                m.setVelocity(0)
                             print("🔄 Drone di-reset")
-                except: pass
+                except BlockingIOError:
+                    pass
+                except Exception as e:
+                    print(f"Socket error: {e}")
+                    try:
+                        self.conn.close()
+                    except:
+                        pass
+                    self.conn = None
 
-            # === CONTROL ===
-            if self.flying and self.waypoints and len(self.motors) == 4:
+            # Kontrol drone
+            if self.flying and len(self.motors) == 4:
                 pos = self.gps.getValues()
+                altitude = pos[2]
+                pos_x, pos_y = pos[0], pos[1]
                 roll, pitch, yaw = self.imu.getRollPitchYaw()
-                target = self.waypoints[self.current_wp]
+                roll_vel = self.gyro.getValues()[0]
+                pitch_vel = self.gyro.getValues()[1]
 
-                # POSITION CONTROL (outer loop)
-                error_x = target[0] - pos[0]
-                error_y = target[1] - pos[1]
-                desired_roll  = max(-0.5, min(0.5, self.k_pos * error_y))   # roll untuk gerak samping
-                desired_pitch = max(-0.5, min(0.5, -self.k_pos * error_x))  # pitch untuk maju/mundur
+                # Altitude control (cubic)
+                diff = self.target_altitude - altitude + self.k_vertical_offset
+                clamped_diff = max(-1.0, min(1.0, diff))
+                vertical_input = self.k_vertical_p * (clamped_diff ** 3)
 
-                # Setpoint attitude
-                self.pid_roll.setpoint = desired_roll
-                self.pid_pitch.setpoint = desired_pitch
-                self.pid_yaw.setpoint = 0
+                roll_dist = 0.0
+                pitch_dist = 0.0
+                yaw_input = 0.0
 
-                roll_cmd  = self.pid_roll(roll)
-                pitch_cmd = self.pid_pitch(pitch)
-                yaw_cmd   = self.pid_yaw(yaw)
+                # Jika takeoff selesai dan ada waypoint
+                if self.takeoff_done and self.waypoints and self.current_wp < len(self.waypoints):
+                    target = self.waypoints[self.current_wp]
+                    error_x = target[0] - pos_x
+                    error_y = target[1] - pos_y
+                    dist = math.hypot(error_x, error_y)
 
-                # ALTITUDE
-                alt_error = target[2] - pos[2]
-                if not self.takeoff_done and pos[2] < 2.5:
-                    thrust = 280.0   # boost takeoff
-                    if pos[2] > 2.5:
-                        self.takeoff_done = True
+                    # Deceleration gain
+                    if dist < self.decel_distance:
+                        gain = self.k_pos * (dist / self.decel_distance)
+                    else:
+                        gain = self.k_pos
+                    gain = max(0.2, gain)
+
+                    # Koreksi arah (berdasarkan test: maju = -pitch, roll = +roll)
+                    roll_dist = gain * error_y
+                    pitch_dist = -gain * error_x
+
+                    # Batasi disturbance
+                    max_dist = 1.0
+                    roll_dist = max(-max_dist, min(max_dist, roll_dist))
+                    pitch_dist = max(-max_dist, min(max_dist, pitch_dist))
+
+                    # Debug
+                    self.debug_counter += 1
+                    if self.debug_counter >= 50:
+                        self.debug_counter = 0
+                        print(f"Pos: ({pos_x:.2f}, {pos_y:.2f}) Target: ({target[0]:.2f}, {target[1]:.2f}) Dist: {dist:.2f} Rdist: {roll_dist:.2f} Pdist: {pitch_dist:.2f}")
+
+                    # Cek waypoint tercapai
+                    if dist < self.wp_threshold:
+                        self.current_wp += 1
+                        print(f"✅ Waypoint {self.current_wp} dicapai")
+                        if self.current_wp >= len(self.waypoints):
+                            print("🏁 Semua waypoint selesai, landing...")
+                            self.target_altitude = 0.0   # Mulai landing
+                            # Setelah landing, kita bisa menghentikan flying setelah altitude 0
                 else:
-                    self.pid_alt.setpoint = target[2]
-                    thrust = self.pid_alt(pos[2])
-                    thrust = max(120, min(380, thrust))
+                    # Jika tidak ada waypoint atau takeoff belum selesai, tetap hover (tidak ada disturbance)
+                    pass
 
-                # MOTOR MIXING (X configuration)
-                self.motors[0].setVelocity(thrust - roll_cmd + pitch_cmd + yaw_cmd)   # front left
-                self.motors[1].setVelocity(thrust + roll_cmd + pitch_cmd - yaw_cmd)   # front right
-                self.motors[2].setVelocity(thrust - roll_cmd - pitch_cmd - yaw_cmd)   # rear left
-                self.motors[3].setVelocity(thrust + roll_cmd - pitch_cmd + yaw_cmd)   # rear right
+                # Yaw control: pertahankan heading 0 (opsional, bisa diaktifkan jika perlu)
+                # self.yaw_pid.setpoint = 0.0
+                # yaw_input = self.yaw_pid(yaw)
+                # yaw_input = max(-0.5, min(0.5, yaw_input))
 
-                # Cek sampai waypoint
-                dist = math.hypot(error_x, error_y)
-                if dist < 0.4 and abs(alt_error) < 0.5:
-                    self.current_wp += 1
-                    if self.current_wp >= len(self.waypoints):
-                        self.flying = False
-                        print("🏁 Sampai tujuan!")
-                        for m in self.motors: m.setVelocity(0)
+                # Stabilization
+                clamped_roll = max(-1.0, min(1.0, roll))
+                clamped_pitch = max(-1.0, min(1.0, pitch))
+                roll_input = self.k_roll_p * clamped_roll + roll_vel + roll_dist
+                pitch_input = self.k_pitch_p * clamped_pitch + pitch_vel + pitch_dist
+
+                # Motor mixing dengan tanda yaw dibalik (dari test)
+                front_left  = self.k_vertical_thrust + vertical_input - roll_input + pitch_input + yaw_input
+                front_right = self.k_vertical_thrust + vertical_input + roll_input + pitch_input - yaw_input
+                rear_left   = self.k_vertical_thrust + vertical_input - roll_input - pitch_input - yaw_input
+                rear_right  = self.k_vertical_thrust + vertical_input + roll_input - pitch_input + yaw_input
+
+                self.motors[0].setVelocity(front_left)
+                self.motors[1].setVelocity(-front_right)
+                self.motors[2].setVelocity(-rear_left)
+                self.motors[3].setVelocity(rear_right)
+
+                # Cek takeoff selesai
+                if not self.takeoff_done and altitude >= 1.95:
+                    self.takeoff_done = True
+                    print("✅ Take-off selesai, mulai navigasi")
+
+                # Landing: jika target_altitude 0 dan altitude <= 0.1, matikan motor dan selesai
+                if self.target_altitude == 0.0 and altitude <= 0.1:
+                    print("Drone mendarat, matikan motor")
+                    for m in self.motors:
+                        m.setVelocity(0)
+                    self.flying = False
+                    break
 
 if __name__ == "__main__":
     supervisor = DroneSupervisor()
