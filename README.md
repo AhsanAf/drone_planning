@@ -1,73 +1,24 @@
+20/4/2026
+penambahan file drone_supervisor_pt2
+fungsi : drone yang nantinya sudah ada pid dan fisika diharapkan bisa terbang dengan normal
 
-## PANDUAN INSTALASI & CARA MENJALANKAN PROGRAM
+edit bagian world info
+WorldInfo {
+  basicTimeStep 8
+  defaultDamping Damping {
+    linear 0.5
+    angular 0.5
+  }
+}
+hasil : Masih error di bagian pid
 
-Ikuti langkah-langkah di bawah ini secara berurutan untuk menyiapkan 
-program di komputer.
+tambahkan pip PID
+pip install simple_pid
+hasil : command berjalan tetapi gui tidak menerima traceback dari drone_supervisor
 
------------------
-## 1. PERSIAPAN AWAL
-
-Pastikan komputer sudah memiliki Python 3.14.
-- Download di: https://www.python.org/downloads/
-
-------------------------------------
-## 2. CARA INSTALASI VIRTUAL ENVIRONMENTS
-
-Buka folder program ini, lalu buka Terminal (Mac/Linux) atau 
-Command Prompt/PowerShell (Windows). Ketik perintah berikut:
-
-A. Buat Ruang Kerja Khusus (Virtual Environment)
-   Ketik perintah ini dan tekan Enter:
-   
-   Windows:
-   ``` bash 
-   python -m venv .venv
-```
-   
-   Mac/Linux:
-   ``` bash
-python3 -m venv .venv
-   ```
-
-B. Aktifkan Ruang Kerja
-   Setelah dibuat, kita harus "masuk" ke dalamnya:
-
-   Windows (Command Prompt):
-   ``` bash
-   .venv\Scripts\activate
-```
-
-   Mac/Linux:
-   ``` bash
-   source .venv/bin/activate
-```
-
-   TANDA BERHASIL: Muncul tulisan (.venv) di baris ketikan Anda.
-
-C. Instal Bahan-Bahan (Library)
-   Pastikan (.venv) sudah aktif, lalu ketik:
-   
-   ``` bash
-   pip install -r requirements.txt
-```
-   
-------------------------------------
-## 3. CARA MENJALANKAN PROGRAM
-
-Setelah instalasi selesai, jalankan program dengan perintah:
-
-``` bash
-python drone_gui.py
-```
-
----------------------------
-
-## 4. CARA BERHENTI/KELUAR
-
-Jika sudah selesai, cukup ketik:
-
-```bash
-deactivate
-```
-
------------------------
+21/4/2026
+update : propeler drone sudah bisa berputar tetapi masih stand by belum ada take off (edit code drone_supervisor_pt2)
+update : dicoba dengan program bawaan webots mavic2pro dan bisa dikontrol dengan normal bisa naik turun maju mundur
+tidak seperti sebelumnya pada saat menggunakan device mac (masalah belum ditemukan)
+update : drone sudah bisa take off namun berputar tidak jelas dan terpental
+indikasi : kemungkinan setting PID yang kurang cocok
