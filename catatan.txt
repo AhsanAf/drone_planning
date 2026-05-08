@@ -58,3 +58,17 @@ Hasil: Take-off stabil, tidak berputar.
 
 3. Penambahan program drone testing untuk cek apakah pergerakan berjalan dengan normal atau tidak
 hasil : drone bergerak dengan normal
+
+8/5/2026
+update :
+setelah mengganti koreksi arah menjadi
+                    roll_dist = -gain * error_y
+                    pitch_dist = gain * error_x
+drone sudah bisa mendekati ke waypoint tapi masih miss karena yaw tidak lurus
+penambahan algo meluruskan yaw
+                self.yaw_pid.setpoint = 0.0
+                yaw_input = self.yaw_pid(yaw)
+                yaw_input = max(-0.5, min(0.5, yaw_input))
+drone sudah bisa mencapai goal dengan mulus tidak ada masalah
+kendala : rotary drone masih bersentuhan dengan obstacle namun tidak jatuh karena disini basisnya simulasi dan mencoba
+mencari cara agar drone tidak bersentuhan dengan obstacle
