@@ -144,7 +144,7 @@ class DroneSupervisor(Supervisor):
                 except BlockingIOError:
                     pass
                 except Exception as e:
-                    print(f"Socket error: {e}")
+                    printf("Socket error: {e}")
                     try:
                         self.conn.close()
                     except:
@@ -166,7 +166,7 @@ class DroneSupervisor(Supervisor):
                 vertical_input = self.k_vertical_p * (clamped_diff ** 3)
 
                 roll_dist = 0.0
-                pitch_dist = 0.0
+                pitch_dist = 0.5
                 yaw_input = 0.0
 
                 # Jika takeoff selesai dan ada waypoint
@@ -184,8 +184,8 @@ class DroneSupervisor(Supervisor):
                     gain = max(0.2, gain)
 
                     # Koreksi arah (berdasarkan test: maju = -pitch, roll = +roll)
-                    roll_dist = gain * error_y
-                    pitch_dist = -gain * error_x
+                    roll_dist = -gain * error_y
+                    pitch_dist = gain * error_x
 
                     # Batasi disturbance
                     max_dist = 1.0
@@ -211,9 +211,9 @@ class DroneSupervisor(Supervisor):
                     pass
 
                 # Yaw control: pertahankan heading 0 (opsional, bisa diaktifkan jika perlu)
-                # self.yaw_pid.setpoint = 0.0
-                # yaw_input = self.yaw_pid(yaw)
-                # yaw_input = max(-0.5, min(0.5, yaw_input))
+                self.yaw_pid.setpoint = 0.0
+                yaw_input = self.yaw_pid(yaw)
+                yaw_input = max(-0.5, min(0.5, yaw_input))
 
                 # Stabilization
                 clamped_roll = max(-1.0, min(1.0, roll))
