@@ -14,8 +14,8 @@ WorldInfo {
   }
 }
 Viewpoint {
-  orientation -0.15757557496247 0.973963483615254 0.16298794666872066 1.5634247386881142
-  position -7.954142651417598 -6.673632827448518 28.595433640978055
+  orientation -0.17755967692087524 0.23097267897644466 0.9566212326193677 1.3538888732679177
+  position -10.488028327627076 -19.044117639814655 4.92094852025155
 }
 TexturedBackground {
 }
@@ -46,7 +46,7 @@ DEF OBSTACLE Wall {
   translation -5.36846 1.2284 2.50265e-13
   rotation 0 0 1 1.5708
   name "OBSTACLE(6)"
-  size 2 2 4
+  size 2 20 4
 }
 DEF OBSTACLE Wall {
   translation 0.632872 1.17946 2.43849e-13
@@ -97,7 +97,7 @@ DEF OBSTACLE Wall {
   size 2 2 4
 }
 DEF TARGET Solid {
-  translation 6.59043 6.40059 -1.84156e-14
+  translation -5.09196 6.26256 3.97
   rotation 0 0 1 1.6057
   children [
     Shape {
@@ -114,12 +114,11 @@ DEF TARGET Solid {
   name "GOAL_POINT"
 }
 Mavic2Pro {
-  hidden position_0_0 -1.0769121828238794e-08
-  hidden position_5_0 3.1137603629579817e-08
-  hidden rotation_6 0 1 0 2.9802322387695313e-08
-  hidden position_6_0 7.208237207170222e-09
-  translation -6.21244 -6.46651 0.968149
-  rotation 0.034863927635417 2.9406223007060968e-05 0.9993920680519265 -3.1399388180378764
-  controller "drone_supervisor_pt2"
+  hidden position_0_0 1.3347736428361918e-09
+  hidden position_5_0 1.8993344511806478e-09
+  hidden position_6_0 1.1728509165657232e-09
+  translation -6.284661810249261 -6.506669994450805 0.06570872787430376
+  rotation 0.03486392756469097 3.354119453331192e-05 0.9993920679241717 -3.1397017561391825
+  controller "3d_spv"
   supervisor TRUE
 }
