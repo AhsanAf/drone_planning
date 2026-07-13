@@ -11,27 +11,21 @@ import numpy as np
 # ============================================================
 
 def is_point_in_box(px, py, pz, obs, margin=0.0):
-    """
-    Cek apakah titik (3D) berada di dalam obstacle box,
-    dengan tambahan margin (misal radius drone).
-    """
     tx, ty, tz = px - obs['x'], py - obs['y'], pz - obs['z']
     c, s = math.cos(-obs['rot']), math.sin(-obs['rot'])
     lx, ly = tx * c - ty * s, tx * s + ty * c
     lz = tz
-    # Tambahkan margin ke semua sisi
-    return (abs(lx) <= obs['w']/2 + margin and
-            abs(ly) <= obs['h']/2 + margin and
-            abs(lz) <= obs['d']/2 + margin)
+    return (abs(lx) <= obs['width']/2 + margin and
+            abs(ly) <= obs['depth']/2 + margin and
+            abs(lz) <= obs['height']/2 + margin)
 
 def get_box_corners(obs):
-    """Dapatkan 8 sudut kotak 3D untuk visualisasi."""
     c, s = math.cos(obs['rot']), math.sin(obs['rot'])
-    hw, hh, hd = obs['w']/2, obs['h']/2, obs['d']/2
+    hw, hd, hh = obs['width']/2, obs['depth']/2, obs['height']/2
     pts = []
     for x in [-hw, hw]:
-        for y in [-hh, hh]:
-            for z in [-hd, hd]:
+        for y in [-hd, hd]:
+            for z in [-hh, hh]:
                 rx = obs['x'] + (x*c - y*s)
                 ry = obs['y'] + (x*s + y*c)
                 pts.append([rx, ry, obs['z'] + z])
@@ -43,25 +37,22 @@ def calculate_path_cost_3d(path):
     return sum(math.dist(path[i], path[i+1]) for i in range(len(path)-1))
 
 # ============================================================
-#  PLANNING ENGINE 3D (RRT + RRT*) dengan radius drone
+#  PLANNING ENGINE 3D (RRT + RRT*)
 # ============================================================
 
 class PlanningEngine3D:
     def __init__(self, start, goal, obstacles, drone_radius=0.8, bounds=(-10, 10)):
-        # Pastikan start dan goal adalah list 3 elemen
         if len(start) == 2:
             start = [start[0], start[1], 0.0]
         if len(goal) == 2:
             goal = [goal[0], goal[1], 0.0]
-        self.start = {"x": start[0], "y": start[1], "z": start[2],
-                      "parent": None, "cost": 0.0}
+        self.start = {"x": start[0], "y": start[1], "z": start[2], "parent": None, "cost": 0.0}
         self.goal = {"x": goal[0], "y": goal[1], "z": goal[2]}
         self.obstacles = obstacles
         self.bounds = bounds
-        self.drone_radius = drone_radius   # ← radius drone untuk clearance
+        self.drone_radius = drone_radius
         self.node_list = []
 
-        # Parameter RRT
         self.expand_dis = 0.5
         self.search_radius = 2.0
         self.max_gaussian_attempts = 50
@@ -70,25 +61,17 @@ class PlanningEngine3D:
         self.uniform_bias = 0.4
 
     def check_collision(self, x, y, z):
-        """Cek apakah titik (dengan radius drone) bertabrakan dengan obstacle atau keluar batas."""
-        # Cek batas dunia (dengan margin radius)
         b = self.bounds
         if (x < b[0] + self.drone_radius or x > b[1] - self.drone_radius or
             y < b[0] + self.drone_radius or y > b[1] - self.drone_radius or
             z < b[0] + self.drone_radius or z > b[1] - self.drone_radius):
-            return True  # tabrakan dengan batas dunia
-
-        # Cek obstacle dengan margin radius
+            return True
         for o in self.obstacles:
             if is_point_in_box(x, y, z, o, margin=self.drone_radius):
                 return True
         return False
 
     def is_line_safe(self, p1, p2):
-        """
-        Cek garis 3D aman (tidak menembus obstacle atau batas) dengan
-        memperhitungkan radius drone.
-        """
         dist = math.dist(p1, p2)
         steps = max(2, int(dist / 0.1))
         for i in range(steps + 1):
@@ -101,7 +84,6 @@ class PlanningEngine3D:
         return True
 
     def get_gaussian_sample(self):
-        """Gaussian sampling 3D dengan radius clearance."""
         b = self.bounds
         for _ in range(self.max_gaussian_attempts):
             x1 = random.uniform(b[0] + self.drone_radius, b[1] - self.drone_radius)
@@ -109,38 +91,28 @@ class PlanningEngine3D:
             z1 = random.uniform(b[0] + self.drone_radius, b[1] - self.drone_radius)
             if self.check_collision(x1, y1, z1):
                 continue
-
             sigma = random.uniform(0.5, 2.0)
             x2 = max(b[0]+self.drone_radius, min(b[1]-self.drone_radius, random.gauss(x1, sigma)))
             y2 = max(b[0]+self.drone_radius, min(b[1]-self.drone_radius, random.gauss(y1, sigma)))
             z2 = max(b[0]+self.drone_radius, min(b[1]-self.drone_radius, random.gauss(z1, sigma)))
-
             if self.check_collision(x2, y2, z2):
                 mx, my, mz = (x1+x2)/2, (y1+y2)/2, (z1+z2)/2
                 if not self.check_collision(mx, my, mz):
                     return [mx, my, mz]
-        # Fallback
         return [random.uniform(b[0]+self.drone_radius, b[1]-self.drone_radius),
                 random.uniform(b[0]+self.drone_radius, b[1]-self.drone_radius),
                 random.uniform(b[0]+self.drone_radius, b[1]-self.drone_radius)]
 
     def is_goal_reachable(self, node):
-        dist = math.dist([node["x"], node["y"], node["z"]],
-                         [self.goal["x"], self.goal["y"], self.goal["z"]])
+        dist = math.dist([node["x"], node["y"], node["z"]], [self.goal["x"], self.goal["y"], self.goal["z"]])
         if dist <= self.expand_dis * 1.5:
-            if self.is_line_safe([node["x"], node["y"], node["z"]],
-                                 [self.goal["x"], self.goal["y"], self.goal["z"]]):
+            if self.is_line_safe([node["x"], node["y"], node["z"]], [self.goal["x"], self.goal["y"], self.goal["z"]]):
                 return True
         return False
-
-    # ============================================================
-    #  ALGORITMA 1: Multi-Bias RRT (3D)
-    # ============================================================
 
     def solve_multibias(self, max_iter=500):
         self.node_list = [self.start]
         b = self.bounds
-
         for _ in range(max_iter):
             p = random.random()
             if p < self.goal_bias:
@@ -152,15 +124,10 @@ class PlanningEngine3D:
                        random.uniform(b[0]+self.drone_radius, b[1]-self.drone_radius),
                        random.uniform(b[0]+self.drone_radius, b[1]-self.drone_radius)]
 
-            nearest = min(self.node_list,
-                          key=lambda n: (n["x"]-rnd[0])**2 +
-                                        (n["y"]-rnd[1])**2 +
-                                        (n["z"]-rnd[2])**2)
-
+            nearest = min(self.node_list, key=lambda n: (n["x"]-rnd[0])**2 + (n["y"]-rnd[1])**2 + (n["z"]-rnd[2])**2)
             dist = math.dist([nearest["x"], nearest["y"], nearest["z"]], rnd)
             theta = math.atan2(rnd[1] - nearest["y"], rnd[0] - nearest["x"])
             step = min(self.expand_dis, dist)
-
             t_step = step / dist if dist > 0 else 0
             new_node = {
                 "x": nearest["x"] + step * math.cos(theta),
@@ -169,28 +136,18 @@ class PlanningEngine3D:
                 "parent": nearest,
                 "cost": nearest["cost"] + step
             }
-
             if self.check_collision(new_node["x"], new_node["y"], new_node["z"]):
                 continue
-            if not self.is_line_safe([nearest["x"], nearest["y"], nearest["z"]],
-                                     [new_node["x"], new_node["y"], new_node["z"]]):
+            if not self.is_line_safe([nearest["x"], nearest["y"], nearest["z"]], [new_node["x"], new_node["y"], new_node["z"]]):
                 continue
-
             self.node_list.append(new_node)
-
             if self.is_goal_reachable(new_node):
                 return self.extract_path(new_node)
-
         return None
-
-    # ============================================================
-    #  ALGORITMA 2: RRT* (3D)
-    # ============================================================
 
     def solve_rrt_star(self, max_iter=500):
         self.node_list = [self.start]
         b = self.bounds
-
         for _ in range(max_iter):
             if random.random() < 0.05:
                 rnd = [self.goal["x"], self.goal["y"], self.goal["z"]]
@@ -199,16 +156,11 @@ class PlanningEngine3D:
                        random.uniform(b[0]+self.drone_radius, b[1]-self.drone_radius),
                        random.uniform(b[0]+self.drone_radius, b[1]-self.drone_radius)]
 
-            nearest = min(self.node_list,
-                          key=lambda n: (n["x"]-rnd[0])**2 +
-                                        (n["y"]-rnd[1])**2 +
-                                        (n["z"]-rnd[2])**2)
-
+            nearest = min(self.node_list, key=lambda n: (n["x"]-rnd[0])**2 + (n["y"]-rnd[1])**2 + (n["z"]-rnd[2])**2)
             dist = math.dist([nearest["x"], nearest["y"], nearest["z"]], rnd)
             theta = math.atan2(rnd[1] - nearest["y"], rnd[0] - nearest["x"])
             step = min(self.expand_dis, dist)
             t_step = step / dist if dist > 0 else 0
-
             new_node = {
                 "x": nearest["x"] + step * math.cos(theta),
                 "y": nearest["y"] + step * math.sin(theta),
@@ -216,39 +168,26 @@ class PlanningEngine3D:
                 "parent": nearest,
                 "cost": nearest["cost"] + step
             }
-
             if self.check_collision(new_node["x"], new_node["y"], new_node["z"]):
                 continue
-            if not self.is_line_safe([nearest["x"], nearest["y"], nearest["z"]],
-                                     [new_node["x"], new_node["y"], new_node["z"]]):
+            if not self.is_line_safe([nearest["x"], nearest["y"], nearest["z"]], [new_node["x"], new_node["y"], new_node["z"]]):
                 continue
 
-            # RRT*: Choose best parent
-            near_nodes = [n for n in self.node_list
-                          if (n["x"]-new_node["x"])**2 +
-                             (n["y"]-new_node["y"])**2 +
-                             (n["z"]-new_node["z"])**2 <= self.search_radius**2]
-
+            near_nodes = [n for n in self.node_list if (n["x"]-new_node["x"])**2 + (n["y"]-new_node["y"])**2 + (n["z"]-new_node["z"])**2 <= self.search_radius**2]
             for near in near_nodes:
-                d = math.dist([near["x"], near["y"], near["z"]],
-                              [new_node["x"], new_node["y"], new_node["z"]])
+                d = math.dist([near["x"], near["y"], near["z"]], [new_node["x"], new_node["y"], new_node["z"]])
                 if near["cost"] + d < new_node["cost"]:
-                    if self.is_line_safe([near["x"], near["y"], near["z"]],
-                                         [new_node["x"], new_node["y"], new_node["z"]]):
+                    if self.is_line_safe([near["x"], near["y"], near["z"]], [new_node["x"], new_node["y"], new_node["z"]]):
                         new_node["cost"] = near["cost"] + d
                         new_node["parent"] = near
 
             self.node_list.append(new_node)
-
-            # RRT*: Rewiring
             for near in near_nodes:
                 if near == new_node["parent"]:
                     continue
-                d = math.dist([new_node["x"], new_node["y"], new_node["z"]],
-                              [near["x"], near["y"], near["z"]])
+                d = math.dist([new_node["x"], new_node["y"], new_node["z"]], [near["x"], near["y"], near["z"]])
                 if new_node["cost"] + d < near["cost"]:
-                    if self.is_line_safe([new_node["x"], new_node["y"], new_node["z"]],
-                                         [near["x"], near["y"], near["z"]]):
+                    if self.is_line_safe([new_node["x"], new_node["y"], new_node["z"]], [near["x"], near["y"], near["z"]]):
                         near["parent"] = new_node
                         near["cost"] = new_node["cost"] + d
 
@@ -267,7 +206,6 @@ class PlanningEngine3D:
         return path[::-1]
 
     def smooth_path(self, path, max_smooth_iter=30):
-        """Path smoothing 3D."""
         if not path or len(path) < 3:
             return path
         smoothed = [path[0]]
@@ -288,7 +226,7 @@ class PlanningEngine3D:
 
 
 # ============================================================
-#  GUI 3D dengan input radius drone
+#  GUI 3D
 # ============================================================
 
 class DroneApp3D:
@@ -300,77 +238,45 @@ class DroneApp3D:
         self.data = {"start": [0,0,0], "goal": [5,5,3], "obs": [], "path": []}
         self.running = False
 
-        # ---- Side Panel ----
         side = tk.Frame(root, width=300, bg="#2c3e50")
         side.pack(side=tk.LEFT, fill=tk.Y)
         side.pack_propagate(False)
 
-        tk.Label(side, text="ALGORITHM", bg="#2c3e50", fg="white",
-                 font=("Arial", 11, "bold")).pack(pady=15)
-
+        tk.Label(side, text="ALGORITHM", bg="#2c3e50", fg="white", font=("Arial", 11, "bold")).pack(pady=15)
         self.algo_var = tk.StringVar(value="multibias")
-        tk.Radiobutton(side, text="RRT*", variable=self.algo_var,
-                       value="rrtstar", bg="#2c3e50", fg="white",
-                       selectcolor="#34495e").pack(anchor="w", padx=20, pady=2)
-        tk.Radiobutton(side, text="Multi-Bias RRT", variable=self.algo_var,
-                       value="multibias", bg="#2c3e50", fg="white",
-                       selectcolor="#34495e").pack(anchor="w", padx=20, pady=2)
+        tk.Radiobutton(side, text="RRT*", variable=self.algo_var, value="rrtstar", bg="#2c3e50", fg="white", selectcolor="#34495e").pack(anchor="w", padx=20, pady=2)
+        tk.Radiobutton(side, text="Multi-Bias RRT", variable=self.algo_var, value="multibias", bg="#2c3e50", fg="white", selectcolor="#34495e").pack(anchor="w", padx=20, pady=2)
 
         iter_frame = tk.Frame(side, bg="#2c3e50")
         iter_frame.pack(fill='x', padx=20, pady=15)
-        tk.Label(iter_frame, text="MAX ITERATIONS", bg="#2c3e50",
-                 fg="white", font=("Arial", 9, "bold")).pack(anchor="w")
+        tk.Label(iter_frame, text="MAX ITERATIONS", bg="#2c3e50", fg="white", font=("Arial", 9, "bold")).pack(anchor="w")
         self.iter_var = tk.StringVar(value="500")
         tk.Entry(iter_frame, textvariable=self.iter_var, width=15).pack(pady=5)
 
-        # ---- Input radius drone ----
         radius_frame = tk.Frame(side, bg="#2c3e50")
         radius_frame.pack(fill='x', padx=20, pady=10)
-        tk.Label(radius_frame, text="DRONE RADIUS (m)", bg="#2c3e50",
-                 fg="white", font=("Arial", 9, "bold")).pack(anchor="w")
-        self.radius_var = tk.StringVar(value="0.8")
+        tk.Label(radius_frame, text="DRONE RADIUS (m)", bg="#2c3e50", fg="white", font=("Arial", 9, "bold")).pack(anchor="w")
+        self.radius_var = tk.StringVar(value="1.2")  # Dinaikkan dari 0.8 ke 1.2 agar path lebih aman dari tembok
         tk.Entry(radius_frame, textvariable=self.radius_var, width=10).pack(pady=2)
-        tk.Label(radius_frame, text="(clearance from obstacles)", 
-                 bg="#2c3e50", fg="#bdc3c7", font=("Arial", 7)).pack()
+        tk.Label(radius_frame, text="(clearance from obstacles)", bg="#2c3e50", fg="#bdc3c7", font=("Arial", 7)).pack()
 
-        # ---- Manual Goal Z ----
-        goal_frame = tk.Frame(side, bg="#2c3e50")
-        goal_frame.pack(fill='x', padx=20, pady=10)
-        tk.Label(goal_frame, text="GOAL Z HEIGHT", bg="#2c3e50",
-                 fg="white", font=("Arial", 9, "bold")).pack(anchor="w")
-        self.goal_z_var = tk.StringVar(value="3.0")
-        tk.Entry(goal_frame, textvariable=self.goal_z_var, width=10).pack(pady=2)
-        tk.Label(goal_frame, text="(override goal z from Webots)",
-                 bg="#2c3e50", fg="#bdc3c7", font=("Arial", 7)).pack()
-
-        # ---- Tombol ----
         self.btn_map = ttk.Button(side, text="1. LOAD MAP", command=self.get_map)
         self.btn_map.pack(fill='x', padx=20, pady=5)
-
-        self.btn_run = ttk.Button(side, text="2. RUN PLANNING",
-                                  command=self.start_thread, state="disabled")
+        self.btn_run = ttk.Button(side, text="2. RUN PLANNING", command=self.start_thread, state="disabled")
         self.btn_run.pack(fill='x', padx=20, pady=5)
-
-        self.btn_fly = ttk.Button(side, text="3. EXECUTE (WEBOTS)",
-                                  command=self.fly, state="disabled")
+        self.btn_fly = ttk.Button(side, text="3. EXECUTE (WEBOTS)", command=self.fly, state="disabled")
         self.btn_fly.pack(fill='x', padx=20, pady=5)
-
-        self.btn_reset = tk.Button(side, text="⚠ RESET DRONE",
-                                   command=self.reset_sim, bg="#e74c3c", fg="white")
+        self.btn_reset = tk.Button(side, text="⚠ RESET DRONE", command=self.reset_sim, bg="#e74c3c", fg="white")
         self.btn_reset.pack(fill='x', padx=20, pady=15)
 
-        self.lbl_metrics = tk.Label(side, text="Status: Ready", bg="#2c3e50",
-                                    fg="#bdc3c7", justify=tk.LEFT,
-                                    font=("Consolas", 9))
+        self.lbl_metrics = tk.Label(side, text="Status: Ready", bg="#2c3e50", fg="#bdc3c7", justify=tk.LEFT, font=("Consolas", 9))
         self.lbl_metrics.pack(pady=10, padx=10, anchor="w")
 
-        # ---- 3D Plot ----
         self.fig = plt.figure(figsize=(7, 7))
         self.ax = self.fig.add_subplot(111, projection='3d')
         self.canvas = FigureCanvasTkAgg(self.fig, master=root)
         self.canvas.get_tk_widget().pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
-        # ---- Koneksi Socket ----
         self.connect_socket()
 
     def connect_socket(self):
@@ -383,7 +289,6 @@ class DroneApp3D:
             self.sock = None
             self.root.after(2000, self.connect_socket)
 
-    # ============== KONVERSI DATA 2D → 3D ==============
     def normalize_point(self, point, name="point"):
         if not isinstance(point, list):
             raise TypeError(f"{name} harus berupa list")
@@ -395,16 +300,16 @@ class DroneApp3D:
             raise ValueError(f"{name} harus memiliki 2 atau 3 elemen, got {len(point)}")
 
     def normalize_obstacle(self, obs):
-        if 'z' not in obs:
-            obs['z'] = 0.0
-        if 'd' not in obs:
-            obs['d'] = 1.0
-        for key in ['x','y','z','w','h','d','rot']:
-            if key in obs:
-                obs[key] = float(obs[key])
-        return obs
+        return {
+            "x": float(obs.get("x", 0)),
+            "y": float(obs.get("y", 0)),
+            "z": float(obs.get("z", 0)),
+            "width": float(obs.get("width", 1)),
+            "depth": float(obs.get("depth", 1)),
+            "height": float(obs.get("height", 1)),
+            "rot": float(obs.get("rot", 0))
+        }
 
-    # ============== GET MAP ==============
     def get_map(self):
         if not self.sock:
             messagebox.showwarning("Koneksi", "Tidak terhubung ke Webots")
@@ -421,12 +326,7 @@ class DroneApp3D:
                 self.data['start'] = self.normalize_point(data['start'], "start")
             if 'goal' in data:
                 self.data['goal'] = self.normalize_point(data['goal'], "goal")
-                try:
-                    z_override = float(self.goal_z_var.get())
-                    self.data['goal'][2] = z_override
-                    print(f"[INFO] Goal Z di-override ke {z_override}")
-                except:
-                    pass
+                print(f"[INFO] Goal position diterima: {self.data['goal']}")
 
             if 'obstacles' in data and isinstance(data['obstacles'], list):
                 self.data['obs'] = [self.normalize_obstacle(o) for o in data['obstacles']]
@@ -443,10 +343,8 @@ class DroneApp3D:
             import traceback
             traceback.print_exc()
 
-    # ============== DRAW ==============
     def draw_world(self, tree_edges=[]):
         self.ax.clear()
-        
         if self.data.get('obs'):
             for o in self.data['obs']:
                 try:
@@ -479,8 +377,7 @@ class DroneApp3D:
             p_np = np.array(path)
             c = 'cyan' if self.algo_var.get() == "multibias" else 'magenta'
             lbl = 'Multi-Bias Path' if self.algo_var.get() == "multibias" else 'RRT* Path'
-            self.ax.plot3D(p_np[:,0], p_np[:,1], p_np[:,2],
-                           color=c, linewidth=3, label=lbl)
+            self.ax.plot3D(p_np[:,0], p_np[:,1], p_np[:,2], color=c, linewidth=3, label=lbl)
         
         bounds = (-10, 10)
         self.ax.set_xlim(bounds)
@@ -493,29 +390,24 @@ class DroneApp3D:
         self.ax.legend(loc='upper right')
         self.canvas.draw_idle()
 
-    # ============== PLANNING ==============
     def start_thread(self):
         if self.running:
             return
         self.running = True
         self.btn_run.config(state="disabled")
-        threading.Thread(target=self.solve,
-                         args=(int(self.iter_var.get()),),
-                         daemon=True).start()
+        threading.Thread(target=self.solve, args=(int(self.iter_var.get()),), daemon=True).start()
 
     def solve(self, max_iter):
         t0 = time.time()
-        # Ambil radius dari input
         try:
             drone_radius = float(self.radius_var.get())
             if drone_radius < 0.1:
                 drone_radius = 0.1
         except:
-            drone_radius = 0.8
+            drone_radius = 1.2
         print(f"[INFO] Menggunakan drone radius = {drone_radius} m")
 
-        eng = PlanningEngine3D(self.data['start'], self.data['goal'], self.data['obs'],
-                               drone_radius=drone_radius)
+        eng = PlanningEngine3D(self.data['start'], self.data['goal'], self.data['obs'], drone_radius=drone_radius)
 
         if self.algo_var.get() == "rrtstar":
             algo_name = "RRT*"
@@ -530,18 +422,13 @@ class DroneApp3D:
             path = None
 
         dt = time.time() - t0
-
         tree_edges = []
         if len(eng.node_list) < 2000:
             for n in eng.node_list:
                 if n["parent"]:
-                    tree_edges.append([
-                        (n["x"], n["y"], n["z"]),
-                        (n["parent"]["x"], n["parent"]["y"], n["parent"]["z"])
-                    ])
+                    tree_edges.append([(n["x"], n["y"], n["z"]), (n["parent"]["x"], n["parent"]["y"], n["parent"]["z"])])
 
-        self.root.after(0, self.planning_done, path, tree_edges, dt,
-                        len(eng.node_list), algo_name, path is not None)
+        self.root.after(0, self.planning_done, path, tree_edges, dt, len(eng.node_list), algo_name, path is not None)
 
     def planning_done(self, path, tree_edges, dt, nodes, algo_name, success):
         self.running = False
@@ -556,25 +443,24 @@ class DroneApp3D:
         self.data['path'] = path
         self.draw_world(tree_edges)
         cost = calculate_path_cost_3d(path)
-        self.lbl_metrics.config(
-            text=f"[{algo_name} RESULT]\nTime: {dt:.3f}s\nCost: {cost:.2f}m\nNodes: {nodes}\nStatus: SUCCESS"
-        )
+        self.lbl_metrics.config(text=f"[{algo_name} RESULT]\nTime: {dt:.3f}s\nCost: {cost:.2f}m\nNodes: {nodes}\nStatus: SUCCESS")
         self.btn_fly.config(state="normal")
 
-    # ============== EXECUTE / RESET ==============
     def fly(self):
         if self.data['path'] and self.sock:
-            self.sock.sendall(json.dumps({
-                "command": "START_SIM",
-                "path": self.data['path']
-            }).encode())
+            try:
+                self.sock.sendall(json.dumps({"command": "START_SIM", "path": self.data['path']}).encode())
+            except Exception as e:
+                messagebox.showerror("Socket Error", f"Gagal mengirim perintah terbang: {e}")
 
     def reset_sim(self):
         if self.sock:
-            self.sock.sendall(json.dumps({"command": "RESET"}).encode())
+            try:
+                self.sock.sendall(json.dumps({"command": "RESET"}).encode())
+            except:
+                pass
         self.data['path'] = []
         self.draw_world()
-
 
 if __name__ == "__main__":
     root = tk.Tk()

@@ -62,16 +62,16 @@ class DroneSupervisor(Supervisor):
                 self.motors.append(m)
         print(f"✅ {len(self.motors)} propeller ditemukan")
 
-        # Constants
+        # Constants (Semua Settingan YAW/PITCH TETAP SAMA PERSIS SEPERTI ASLI)
         self.k_vertical_thrust = 68.5
         self.k_vertical_offset = 0.6
         self.k_vertical_p = 3.0
         self.k_roll_p = 50.0
         self.k_pitch_p = 30.0
-        self.target_altitude = 2.0   # akan di-update
+        self.target_altitude = 2.0
 
         # Waypoint navigation
-        self.waypoints = []          # list of [x, y, z]
+        self.waypoints = []
         self.current_wp = 0
         self.flying = False
         self.takeoff_done = False
@@ -105,32 +105,38 @@ class DroneSupervisor(Supervisor):
             if node.getDef() and "OBSTACLE" in node.getDef():
                 p = node.getPosition()
                 s = node.getField("size").getSFVec3f()
+                rot_field = node.getField("rotation")
+                if rot_field:
+                    rot = rot_field.getSFRotation()
+                    if abs(rot[2]) > 0.9:
+                        angle = rot[3]
+                    else:
+                        angle = 0.0
+                else:
+                    angle = 0.0
                 obstacles.append({
-                    "x": round(p[0],3),
-                    "y": round(p[1],3),
-                    "z": round(p[2],3),
-                    "w": round(s[0],2),
-                    "h": round(s[1],2),
-                    "d": round(s[2],2),
-                    "rot": 1.5708
+                    "x": round(p[0], 3),
+                    "y": round(p[1], 3),
+                    "z": round(p[2], 3),
+                    "width": round(s[0], 2),
+                    "depth": round(s[1], 2),
+                    "height": round(s[2], 2),
+                    "rot": round(angle, 4)
                 })
         return {"start": start, "goal": goal, "obstacles": obstacles}
 
     # ============================================================
-    #  FOLLOW WAYPOINTS (3D) – PERBAIKAN TAKEOFF
+    #  FOLLOW WAYPOINTS (3D)
     # ============================================================
     def follow_waypoints(self, path):
         if not path or len(path) < 2:
             print("❌ Path kosong atau terlalu pendek")
             return
 
-        # Simpan waypoints dengan Z asli
         self.waypoints = [[p[0], p[1], p[2]] for p in path]
         self.current_wp = 0
         self.flying = True
         self.takeoff_done = False
-
-        # 🔥 PASTIKAN TAKEOFF: target altitude minimal 2.0
         first_z = self.waypoints[0][2]
         self.target_altitude = max(2.0, first_z)
 
@@ -144,7 +150,7 @@ class DroneSupervisor(Supervisor):
     # ============================================================
     def run(self):
         while self.step(self.timestep) != -1:
-            # Socket handling (sama)
+            # Socket handling
             if not self.conn:
                 try:
                     self.conn, addr = self.server.accept()
@@ -193,27 +199,23 @@ class DroneSupervisor(Supervisor):
                 roll_vel = self.gyro.getValues()[0]
                 pitch_vel = self.gyro.getValues()[1]
 
-                # Altitude control (cubic)
+                # Altitude control (Motor Thrust)
                 diff = self.target_altitude - altitude + self.k_vertical_offset
                 clamped_diff = max(-1.0, min(1.0, diff))
                 vertical_input = self.k_vertical_p * (clamped_diff ** 3)
 
                 roll_dist = 0.0
-                pitch_dist = 0.0      # ← default 0 (bukan 0.5) agar tidak bergerak sebelum takeoff
+                pitch_dist = 0.0
                 yaw_input = 0.0
 
-                # Jika takeoff selesai dan ada waypoint
                 if self.takeoff_done and self.waypoints and self.current_wp < len(self.waypoints):
                     target = self.waypoints[self.current_wp]
-
-                    # 🔥 UPDATE TARGET ALTITUDE dari Z waypoint saat ini
                     self.target_altitude = target[2]
 
                     error_x = target[0] - pos_x
                     error_y = target[1] - pos_y
                     dist = math.hypot(error_x, error_y)
 
-                    # Deceleration gain
                     if dist < self.decel_distance:
                         gain = self.k_pos * (dist / self.decel_distance)
                     else:
@@ -223,20 +225,35 @@ class DroneSupervisor(Supervisor):
                     roll_dist = -gain * error_y
                     pitch_dist = gain * error_x
 
-                    # Batasi disturbance
                     max_dist = 1.0
                     roll_dist = max(-max_dist, min(max_dist, roll_dist))
                     pitch_dist = max(-max_dist, min(max_dist, pitch_dist))
 
-                    # Debug
+                    # ======================================================================
+                    # PERBAIKAN PENTING! (TIDAK MENGUBAH YAW/PITCH, HANYA MENAMBAH PENGAWAS)
+                    # 1. Saat ketinggian masih 0-0.5m, prioritas naik (gerak horizontal dibatasi)
+                    # 2. Menambahkan kompensasi tenaga (anti-stall) agar tidak jatuh saat miring
+                    # ======================================================================
+                    if altitude < 0.5:
+                        roll_dist *= 0.2  # Hanya boleh miring 20%
+                        pitch_dist *= 0.2
+                        vertical_input += 2.0  # Tambahan thrust agar cepat naik
+                    elif altitude < 1.0:
+                        roll_dist *= 0.5  # Hanya boleh miring 50%
+                        pitch_dist *= 0.5
+                        vertical_input += 1.0
+
+                    # Kompensasi gaya angkat yang hilang akibat kemiringan drone
+                    vertical_input += (abs(roll_dist) * 0.8 + abs(pitch_dist) * 0.8)
+                    # ======================================================================
+
                     self.debug_counter += 1
-                    if self.debug_counter >= 50:
+                    if self.debug_counter >= 100:
                         self.debug_counter = 0
                         print(f"Pos: ({pos_x:.2f}, {pos_y:.2f}, {altitude:.2f}) "
                               f"Target: ({target[0]:.2f}, {target[1]:.2f}, {target[2]:.2f}) "
                               f"Dist: {dist:.2f}")
 
-                    # Cek waypoint tercapai
                     if dist < self.wp_threshold:
                         self.current_wp += 1
                         print(f"✅ Waypoint {self.current_wp} dicapai")
@@ -244,18 +261,18 @@ class DroneSupervisor(Supervisor):
                             print("🏁 Semua waypoint selesai, landing...")
                             self.target_altitude = 0.0
 
-                # Yaw control
+                # Yaw control (Persis seperti asli)
                 self.yaw_pid.setpoint = 0.0
                 yaw_input = self.yaw_pid(yaw)
                 yaw_input = max(-0.5, min(0.5, yaw_input))
 
-                # Stabilization
+                # Stabilization (Persis seperti asli)
                 clamped_roll = max(-1.0, min(1.0, roll))
                 clamped_pitch = max(-1.0, min(1.0, pitch))
                 roll_input = self.k_roll_p * clamped_roll + roll_vel + roll_dist
                 pitch_input = self.k_pitch_p * clamped_pitch + pitch_vel + pitch_dist
 
-                # Motor mixing (SAMA PERSIS dengan asli)
+                # Motor mixing (Persis seperti asli)
                 front_left  = self.k_vertical_thrust + vertical_input - roll_input + pitch_input + yaw_input
                 front_right = self.k_vertical_thrust + vertical_input + roll_input + pitch_input - yaw_input
                 rear_left   = self.k_vertical_thrust + vertical_input - roll_input - pitch_input - yaw_input
@@ -266,12 +283,10 @@ class DroneSupervisor(Supervisor):
                 self.motors[2].setVelocity(-rear_left)
                 self.motors[3].setVelocity(rear_right)
 
-                # Cek takeoff selesai
                 if not self.takeoff_done and altitude >= 1.95:
                     self.takeoff_done = True
                     print("✅ Take-off selesai, mulai navigasi")
 
-                # Landing
                 if self.target_altitude == 0.0 and altitude <= 0.1:
                     print("🛬 Drone mendarat, matikan motor")
                     for m in self.motors:
