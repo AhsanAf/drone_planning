@@ -1,2 +1,8 @@
 numpy
 matplotlib
+pillow
+pyparsing
+simple-pid
+python-dateutil
+six
+counterpy
