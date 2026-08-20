@@ -1,10 +1,11 @@
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import messagebox, ttk, filedialog
 import socket, json, threading, math, random, time
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import numpy as np
+import openpyxl  # Untuk menyimpan hasil benchmark ke Excel
 
 # ============================================================
 #  HELPER 3D (dengan margin radius drone)
@@ -42,7 +43,8 @@ def calculate_path_cost_3d(path):
 
 class PlanningEngine3D:
     def __init__(self, start, goal, obstacles, drone_radius=0.6,
-                 bounds_xy=(-10, 10), bounds_z=(0, 10)):
+                 bounds_xy=(-10, 10), bounds_z=(0, 10),
+                 goal_bias=0.1, uniform_bias=0.4, gaussian_bias=0.5):
         if len(start) == 2:
             start = [start[0], start[1], 0.0]
         if len(goal) == 2:
@@ -58,9 +60,9 @@ class PlanningEngine3D:
         self.expand_dis = max(0.8, drone_radius * 1.2)
         self.search_radius = max(2.0, drone_radius * 2.5)
         self.max_gaussian_attempts = 50
-        self.goal_bias = 0.1
-        self.gaussian_bias = 0.5
-        self.uniform_bias = 0.4
+        self.goal_bias = goal_bias          # proporsi 0-1
+        self.gaussian_bias = gaussian_bias  # proporsi 0-1
+        self.uniform_bias = uniform_bias    # proporsi 0-1
 
     def check_collision(self, x, y, z):
         bx1, bx2 = self.bounds_xy
@@ -279,6 +281,25 @@ class DroneApp3D:
         tk.Entry(radius_frame, textvariable=self.radius_var, width=10).pack(pady=2)
         tk.Label(radius_frame, text="(clearance from obstacles)", bg="#2c3e50", fg="#bdc3c7", font=("Arial", 7)).pack()
 
+        # === TAMBAHAN: Input untuk bias ===
+        bias_frame = tk.Frame(side, bg="#2c3e50")
+        bias_frame.pack(fill='x', padx=20, pady=10)
+        tk.Label(bias_frame, text="BIAS PROBABILITY (%)", bg="#2c3e50", fg="white", font=("Arial", 9, "bold")).pack(anchor="w")
+
+        tk.Label(bias_frame, text="Goal Bias", bg="#2c3e50", fg="#bdc3c7", font=("Arial", 8)).pack(anchor="w")
+        self.goal_bias_var = tk.StringVar(value="10")
+        tk.Entry(bias_frame, textvariable=self.goal_bias_var, width=10).pack(pady=2)
+
+        tk.Label(bias_frame, text="Uniform Bias", bg="#2c3e50", fg="#bdc3c7", font=("Arial", 8)).pack(anchor="w")
+        self.uniform_bias_var = tk.StringVar(value="40")
+        tk.Entry(bias_frame, textvariable=self.uniform_bias_var, width=10).pack(pady=2)
+
+        tk.Label(bias_frame, text="Gaussian Bias", bg="#2c3e50", fg="#bdc3c7", font=("Arial", 8)).pack(anchor="w")
+        self.gaussian_bias_var = tk.StringVar(value="50")
+        tk.Entry(bias_frame, textvariable=self.gaussian_bias_var, width=10).pack(pady=2)
+
+        # === AKHIR TAMBAHAN BIAS ===
+
         self.btn_map = ttk.Button(side, text="1. LOAD MAP", command=self.get_map)
         self.btn_map.pack(fill='x', padx=20, pady=5)
         self.btn_run = ttk.Button(side, text="2. RUN PLANNING", command=self.start_thread, state="disabled")
@@ -287,6 +308,10 @@ class DroneApp3D:
         self.btn_fly.pack(fill='x', padx=20, pady=5)
         self.btn_reset = tk.Button(side, text="⚠ RESET DRONE", command=self.reset_sim, bg="#e74c3c", fg="white")
         self.btn_reset.pack(fill='x', padx=20, pady=15)
+
+        # === TAMBAHAN: Tombol Benchmark ===
+        self.btn_benchmark = ttk.Button(side, text="BENCHMARK", command=self.open_benchmark_dialog)
+        self.btn_benchmark.pack(fill='x', padx=20, pady=5)
 
         self.lbl_metrics = tk.Label(side, text="Status: Ready", bg="#2c3e50", fg="#bdc3c7", justify=tk.LEFT, font=("Consolas", 9))
         self.lbl_metrics.pack(pady=10, padx=10, anchor="w")
@@ -416,13 +441,53 @@ class DroneApp3D:
         self.ax.legend(loc='upper right')
         self.canvas.draw_idle()
 
+    def validate_bias(self):
+        """Mengambil nilai bias dari input, memvalidasi total 100%.
+        Mengembalikan tuple (goal_bias, uniform_bias, gaussian_bias) dalam proporsi 0-1,
+        atau None jika tidak valid.
+        """
+        try:
+            goal = float(self.goal_bias_var.get())
+            uniform = float(self.uniform_bias_var.get())
+            gaussian = float(self.gaussian_bias_var.get())
+        except ValueError:
+            messagebox.showerror("Error", "Nilai bias harus berupa angka.")
+            return None
+
+        total = goal + uniform + gaussian
+        if abs(total - 100.0) > 1e-6:
+            messagebox.showerror("Error", f"Total bias harus 100%.\nSaat ini: {total:.1f}%")
+            return None
+
+        if goal < 0 or uniform < 0 or gaussian < 0:
+            messagebox.showerror("Error", "Bias tidak boleh negatif.")
+            return None
+
+        # Konversi ke proporsi
+        return (goal/100.0, uniform/100.0, gaussian/100.0)
+
     def start_thread(self):
         if self.running: return
+
+        bias = self.validate_bias()
+        if bias is None:
+            return
+
+        try:
+            max_iter = int(self.iter_var.get())
+            if max_iter <= 0:
+                messagebox.showerror("Error", "Max iterations harus positif.")
+                return
+        except ValueError:
+            messagebox.showerror("Error", "Max iterations harus angka.")
+            return
+
         self.running = True
         self.btn_run.config(state="disabled")
-        threading.Thread(target=self.solve, args=(int(self.iter_var.get()),), daemon=True).start()
+        # Pass bias ke thread
+        threading.Thread(target=self.solve, args=(max_iter, bias), daemon=True).start()
 
-    def solve(self, max_iter):
+    def solve(self, max_iter, bias):
         t0 = time.time()
         try:
             drone_radius = float(self.radius_var.get())
@@ -431,9 +496,14 @@ class DroneApp3D:
             drone_radius = 0.6
         print(f"[INFO] Menggunakan drone radius = {drone_radius} m")
 
+        goal_bias, uniform_bias, gaussian_bias = bias
+
         eng = PlanningEngine3D(self.data['start'], self.data['goal'], self.data['obs'],
                                drone_radius=drone_radius,
-                               bounds_xy=(-10, 10), bounds_z=(0, 10))
+                               bounds_xy=(-10, 10), bounds_z=(0, 10),
+                               goal_bias=goal_bias,
+                               uniform_bias=uniform_bias,
+                               gaussian_bias=gaussian_bias)
 
         if self.algo_var.get() == "rrtstar":
             algo_name = "RRT*"
@@ -545,6 +615,181 @@ class DroneApp3D:
         self.btn_fly.config(state="normal" if self.data['path'] else "disabled")
         self.lbl_metrics.config(text="Status: Reset")
         self.draw_world()
+
+    # ============================================================
+    #  METODE BENCHMARK (TAMBAHAN)
+    # ============================================================
+    def open_benchmark_dialog(self):
+        if not self.data.get('start') or not self.data.get('goal') or not self.data.get('obs'):
+            messagebox.showwarning("Benchmark", "Silakan load map terlebih dahulu.")
+            return
+
+        # Validasi bias sebelum membuka dialog? Atau saat jalankan? Lebih baik saat jalankan.
+        # Tapi kita perlu memastikan bias valid saat benchmark dijalankan.
+        # Kita akan validasi di dalam on_run.
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Benchmark Settings")
+        dialog.geometry("380x280")
+        dialog.resizable(False, False)
+        dialog.grab_set()  # Modal
+
+        # Variabel input
+        iter_var_dialog = tk.StringVar(value=self.iter_var.get())
+        trials_var = tk.StringVar(value="5")
+        file_var = tk.StringVar(value="benchmark.xlsx")
+
+        # Form
+        tk.Label(dialog, text="Iterasi:").pack(anchor='w', padx=20, pady=(20,5))
+        tk.Entry(dialog, textvariable=iter_var_dialog).pack(fill='x', padx=20)
+
+        tk.Label(dialog, text="Jumlah Percobaan:").pack(anchor='w', padx=20, pady=(10,5))
+        tk.Entry(dialog, textvariable=trials_var).pack(fill='x', padx=20)
+
+        tk.Label(dialog, text="Nama File (.xlsx):").pack(anchor='w', padx=20, pady=(10,5))
+        file_frame = tk.Frame(dialog)
+        file_frame.pack(fill='x', padx=20)
+        tk.Entry(file_frame, textvariable=file_var).pack(side='left', fill='x', expand=True)
+        ttk.Button(file_frame, text="Browse", command=lambda: self.browse_benchmark_file(file_var)).pack(side='left', padx=5)
+
+        # Progress bar (indeterminate)
+        progress = ttk.Progressbar(dialog, mode='indeterminate', length=250)
+        # Awalnya tidak ditampilkan
+        status_label = tk.Label(dialog, text="")
+        status_label.pack(pady=5)
+
+        def on_run():
+            # Validasi bias terlebih dahulu
+            bias = self.validate_bias()
+            if bias is None:
+                return
+
+            try:
+                iterations = int(iter_var_dialog.get())
+                if iterations <= 0:
+                    raise ValueError
+                trials = int(trials_var.get())
+                if trials <= 0:
+                    raise ValueError
+            except ValueError:
+                messagebox.showerror("Error", "Iterasi dan jumlah percobaan harus angka positif.")
+                return
+            filename = file_var.get().strip()
+            if not filename:
+                messagebox.showerror("Error", "Nama file tidak boleh kosong.")
+                return
+            if not filename.endswith('.xlsx'):
+                filename += '.xlsx'
+
+            # Disable tombol dan tampilkan progress
+            run_btn.config(state='disabled')
+            cancel_btn.config(state='disabled')
+            progress.pack(pady=10)
+            progress.start(10)
+            status_label.config(text="Benchmarking...")
+
+            # Jalankan di thread terpisah
+            threading.Thread(
+                target=self.run_benchmark_thread,
+                args=(iterations, trials, filename, progress, status_label, dialog, bias),
+                daemon=True
+            ).start()
+
+        def on_cancel():
+            dialog.destroy()
+
+        run_btn = ttk.Button(dialog, text="Jalankan", command=on_run)
+        run_btn.pack(side='left', padx=20, pady=20)
+        cancel_btn = ttk.Button(dialog, text="Cancel", command=on_cancel)
+        cancel_btn.pack(side='right', padx=20, pady=20)
+
+        # Simpan referensi untuk akses dari thread
+        dialog.iter_var = iter_var_dialog
+        dialog.trials_var = trials_var
+        dialog.file_var = file_var
+        dialog.progress = progress
+        dialog.status_label = status_label
+        dialog.run_btn = run_btn
+        dialog.cancel_btn = cancel_btn
+
+    def browse_benchmark_file(self, file_var):
+        filename = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")]
+        )
+        if filename:
+            file_var.set(filename)
+
+    def run_benchmark_thread(self, iterations, trials, filename, progress, status_label, dialog, bias):
+        results = []
+        try:
+            drone_radius = float(self.radius_var.get())
+        except:
+            drone_radius = 0.6
+
+        goal_bias, uniform_bias, gaussian_bias = bias
+
+        for i in range(1, trials + 1):
+            # Update status label via root.after agar thread-safe
+            self.root.after(0, lambda idx=i: status_label.config(text=f"Trial {idx}/{trials}..."))
+            start_time = time.time()
+
+            # Buat engine baru setiap trial
+            eng = PlanningEngine3D(
+                self.data['start'], self.data['goal'], self.data['obs'],
+                drone_radius=drone_radius,
+                bounds_xy=(-10, 10), bounds_z=(0, 10),
+                goal_bias=goal_bias,
+                uniform_bias=uniform_bias,
+                gaussian_bias=gaussian_bias
+            )
+
+            if self.algo_var.get() == "rrtstar":
+                raw_path = eng.solve_rrt_star(iterations)
+            else:
+                raw_path = eng.solve_multibias(iterations)
+
+            elapsed = time.time() - start_time
+            if raw_path:
+                path = eng.smooth_path(raw_path)
+                cost = calculate_path_cost_3d(path)
+            else:
+                path = None
+                cost = None  # None berarti gagal
+
+            nodes = len(eng.node_list)
+            results.append({
+                'nomor': i,
+                'cost': cost,
+                'time': elapsed,
+                'nodes': nodes
+            })
+
+        # Simpan ke Excel
+        try:
+            self.save_benchmark_to_excel(results, filename)
+            self.root.after(0, lambda: self.benchmark_done(dialog, filename))
+        except Exception as e:
+            self.root.after(0, lambda: self.benchmark_error(dialog, str(e)))
+
+    def save_benchmark_to_excel(self, results, filename):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Benchmark"
+        ws.append(["Nomor", "Cost (m)", "Time (s)", "Node"])
+        for r in results:
+            cost_val = r['cost'] if r['cost'] is not None else "FAILED"
+            ws.append([r['nomor'], cost_val, round(r['time'], 4), r['nodes']])
+        wb.save(filename)
+
+    def benchmark_done(self, dialog, filename):
+        dialog.destroy()
+        messagebox.showinfo("Benchmark", f"Benchmark selesai!\nHasil disimpan di:\n{filename}")
+
+    def benchmark_error(self, dialog, error_msg):
+        dialog.destroy()
+        messagebox.showerror("Error", f"Benchmark gagal:\n{error_msg}")
+
 
 if __name__ == "__main__":
     root = tk.Tk()

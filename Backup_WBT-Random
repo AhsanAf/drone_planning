@@ -14,8 +14,8 @@ WorldInfo {
   }
 }
 Viewpoint {
-  orientation -0.2892155466715538 0.27342285493065943 0.9173844940727098 1.712708787302524
-  position -2.714280547851648 -27.855754640825097 18.188002968109853
+  orientation -0.2903767757108848 0.3872021869595083 0.8750747365462701 1.4170932620894954
+  position -9.092831068463669 -23.03479179510599 15.686832210412865
 }
 TexturedBackground {
 }
@@ -26,7 +26,7 @@ RectangleArena {
   floorSize 16 16
 }
 DEF OBSTACLE Wall {
-  translation -1.66117 4.35901 2.84368e-13
+  translation 0.960676 6.23893 3.09237e-13
   rotation 0 0 1 1.5708
   name "OBSTACLE(1)"
   size 2 2 4
@@ -38,61 +38,67 @@ Wall {
   size 1 1 1.2
 }
 DEF OBSTACLE Wall {
-  translation -2.77418 -3.24896 3.83465e-13
+  translation -2.13704 -6.11044 3.3728e-13
   rotation 0 0 1 1.5708
   name "OBSTACLE(11)"
   size 2 2 4
 }
 DEF OBSTACLE Wall {
-  translation -4.38338 4.33133 -2.18693e-13
+  translation -1.70081 2.84978 -2.04483e-13
   rotation 0 0 1 1.5708
   name "OBSTACLE(6)"
   size 2 2 4
 }
 DEF OBSTACLE Wall {
-  translation -2.73761 0.169326 2.36744e-13
+  translation -4.93021 2.65002 -3.35243e-13
   rotation 0 0 1 1.5708
   name "OBSTACLE(4)"
   size 2 2 4
 }
 DEF OBSTACLE Wall {
-  translation 0.797147 -3.20796 2.16889e-13
+  translation -2.80675 -0.739094 -3.28138e-13
+  rotation 0 0 1 1.5708
+  name "OBSTACLE(3)"
+  size 2 2 4
+}
+DEF OBSTACLE Wall {
+  translation -0.166219 -3.536 2.20442e-13
   rotation 0 0 1 1.5708
   name "OBSTACLE(9)"
   size 2 2 4
 }
 DEF OBSTACLE Wall {
-  translation 4.34467 -3.31027 2.46685e-13
+  translation 3.86327 -5.4606 2.46685e-13
   rotation 0 0 1 1.5708
   name "OBSTACLE(12)"
   size 2 2 4
 }
 DEF OBSTACLE Wall {
-  translation -5.37139 0.250243 1.66215e-13
+  translation -5.81718 -2.74277 1.76873e-13
   rotation 0 0 1 1.5708
   name "OBSTACLE(8)"
   size 2 2 4
 }
 DEF OBSTACLE Wall {
-  translation 4.34964 0.318128 2.95914e-13
+  translation 2.08738 -0.201138 2.95914e-13
   rotation 0 0 1 1.5708
   name "OBSTACLE(5)"
   size 2 2 4
 }
 DEF OBSTACLE Wall {
-  translation 1.83374 4.37937 3.56853e-13
+  translation 2.26045 2.89038 3.99486e-13
   rotation 0 0 1 1.5708
   name "OBSTACLE(2)"
   size 2 2 4
 }
 DEF OBSTACLE Wall {
-  translation 4.66373 4.38234 3.93499e-13
+  translation 5.79298 0.0173183 -3.63229e-13
   rotation 0 0 1 1.5708
   name "OBSTACLE(10)"
   size 2 2 4
 }
 DEF TARGET Solid {
-  translation 0.577942 0.661409 0.03
+  translation 6.34211 6.62275 0.03
   rotation 0 0 1 1.6057
   children [
     Shape {

@@ -62,7 +62,7 @@ class DroneSupervisor(Supervisor):
                 self.motors.append(m)
         print(f"✅ {len(self.motors)} propeller ditemukan")
 
-        # Constants
+        # Constants (Semua Settingan YAW/PITCH TETAP SAMA PERSIS SEPERTI ASLI)
         self.k_vertical_thrust = 68.5
         self.k_vertical_offset = 0.6
         self.k_vertical_p = 3.0
@@ -85,7 +85,7 @@ class DroneSupervisor(Supervisor):
         self.yaw_pid.setpoint = 0.0
 
     # ============================================================
-    #  GET MAP DATA (3D) - KONVERSI KOORDINAT
+    #  GET MAP DATA (3D)
     # ============================================================
     def get_map_data(self):
         drone_pos = self.getSelf().getPosition()
@@ -199,7 +199,7 @@ class DroneSupervisor(Supervisor):
                 roll_vel = self.gyro.getValues()[0]
                 pitch_vel = self.gyro.getValues()[1]
 
-                # Altitude control
+                # Altitude control (Motor Thrust)
                 diff = self.target_altitude - altitude + self.k_vertical_offset
                 clamped_diff = max(-1.0, min(1.0, diff))
                 vertical_input = self.k_vertical_p * (clamped_diff ** 3)
@@ -229,17 +229,23 @@ class DroneSupervisor(Supervisor):
                     roll_dist = max(-max_dist, min(max_dist, roll_dist))
                     pitch_dist = max(-max_dist, min(max_dist, pitch_dist))
 
-                    # Kompensasi saat rendah
+                    # ======================================================================
+                    # PERBAIKAN PENTING! (TIDAK MENGUBAH YAW/PITCH, HANYA MENAMBAH PENGAWAS)
+                    # 1. Saat ketinggian masih 0-0.5m, prioritas naik (gerak horizontal dibatasi)
+                    # 2. Menambahkan kompensasi tenaga (anti-stall) agar tidak jatuh saat miring
+                    # ======================================================================
                     if altitude < 0.5:
-                        roll_dist *= 0.2
+                        roll_dist *= 0.2  # Hanya boleh miring 20%
                         pitch_dist *= 0.2
-                        vertical_input += 2.0
+                        vertical_input += 2.0  # Tambahan thrust agar cepat naik
                     elif altitude < 1.0:
-                        roll_dist *= 0.5
+                        roll_dist *= 0.5  # Hanya boleh miring 50%
                         pitch_dist *= 0.5
                         vertical_input += 1.0
 
+                    # Kompensasi gaya angkat yang hilang akibat kemiringan drone
                     vertical_input += (abs(roll_dist) * 0.8 + abs(pitch_dist) * 0.8)
+                    # ======================================================================
 
                     self.debug_counter += 1
                     if self.debug_counter >= 100:
@@ -255,18 +261,18 @@ class DroneSupervisor(Supervisor):
                             print("🏁 Semua waypoint selesai, landing...")
                             self.target_altitude = 0.0
 
-                # Yaw control
+                # Yaw control (Persis seperti asli)
                 self.yaw_pid.setpoint = 0.0
                 yaw_input = self.yaw_pid(yaw)
                 yaw_input = max(-0.5, min(0.5, yaw_input))
 
-                # Stabilization
+                # Stabilization (Persis seperti asli)
                 clamped_roll = max(-1.0, min(1.0, roll))
                 clamped_pitch = max(-1.0, min(1.0, pitch))
                 roll_input = self.k_roll_p * clamped_roll + roll_vel + roll_dist
                 pitch_input = self.k_pitch_p * clamped_pitch + pitch_vel + pitch_dist
 
-                # Motor mixing
+                # Motor mixing (Persis seperti asli)
                 front_left  = self.k_vertical_thrust + vertical_input - roll_input + pitch_input + yaw_input
                 front_right = self.k_vertical_thrust + vertical_input + roll_input + pitch_input - yaw_input
                 rear_left   = self.k_vertical_thrust + vertical_input - roll_input - pitch_input - yaw_input
@@ -281,21 +287,11 @@ class DroneSupervisor(Supervisor):
                     self.takeoff_done = True
                     print("✅ Take-off selesai, mulai navigasi")
 
-                # ======================================================================
-                #  PERUBAHAN UTAMA: KIRIM STATUS LANDED KE GUI
-                # ======================================================================
                 if self.target_altitude == 0.0 and altitude <= 0.1:
                     print("🛬 Drone mendarat, matikan motor")
                     for m in self.motors:
                         m.setVelocity(0)
                     self.flying = False
-                    # Kirim status landing ke GUI
-                    if self.conn:
-                        try:
-                            self.conn.sendall(json.dumps({"status": "LANDED"}).encode())
-                            print("📤 Status LANDED dikirim ke GUI")
-                        except Exception as e:
-                            print(f"Gagal kirim status LANDED: {e}")
                     break
 
 if __name__ == "__main__":

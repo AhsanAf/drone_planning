@@ -37,12 +37,11 @@ def calculate_path_cost_3d(path):
     return sum(math.dist(path[i], path[i+1]) for i in range(len(path)-1))
 
 # ============================================================
-#  PLANNING ENGINE 3D (RRT + RRT*) - DIPERBAIKI
+#  PLANNING ENGINE 3D (RRT + RRT*)
 # ============================================================
 
 class PlanningEngine3D:
-    def __init__(self, start, goal, obstacles, drone_radius=0.6,
-                 bounds_xy=(-10, 10), bounds_z=(0, 10)):
+    def __init__(self, start, goal, obstacles, drone_radius=0.8, bounds=(-10, 10)):
         if len(start) == 2:
             start = [start[0], start[1], 0.0]
         if len(goal) == 2:
@@ -50,27 +49,22 @@ class PlanningEngine3D:
         self.start = {"x": start[0], "y": start[1], "z": start[2], "parent": None, "cost": 0.0}
         self.goal = {"x": goal[0], "y": goal[1], "z": goal[2]}
         self.obstacles = obstacles
-        self.bounds_xy = bounds_xy
-        self.bounds_z = bounds_z
+        self.bounds = bounds
         self.drone_radius = drone_radius
         self.node_list = []
 
-        self.expand_dis = max(0.8, drone_radius * 1.2)
-        self.search_radius = max(2.0, drone_radius * 2.5)
+        self.expand_dis = 0.5
+        self.search_radius = 2.0
         self.max_gaussian_attempts = 50
         self.goal_bias = 0.1
         self.gaussian_bias = 0.5
         self.uniform_bias = 0.4
 
     def check_collision(self, x, y, z):
-        bx1, bx2 = self.bounds_xy
-        bz1, bz2 = self.bounds_z
-        if (x < bx1 + self.drone_radius or x > bx2 - self.drone_radius or
-            y < bx1 + self.drone_radius or y > bx2 - self.drone_radius):
-            return True
-        if z < bz1:   # bawah = 0
-            return True
-        if z > bz2 - self.drone_radius:
+        b = self.bounds
+        if (x < b[0] + self.drone_radius or x > b[1] - self.drone_radius or
+            y < b[0] + self.drone_radius or y > b[1] - self.drone_radius or
+            z < b[0] + self.drone_radius or z > b[1] - self.drone_radius):
             return True
         for o in self.obstacles:
             if is_point_in_box(x, y, z, o, margin=self.drone_radius):
@@ -90,39 +84,35 @@ class PlanningEngine3D:
         return True
 
     def get_gaussian_sample(self):
-        bx1, bx2 = self.bounds_xy
-        bz1, bz2 = self.bounds_z
+        b = self.bounds
         for _ in range(self.max_gaussian_attempts):
-            x1 = random.uniform(bx1 + self.drone_radius, bx2 - self.drone_radius)
-            y1 = random.uniform(bx1 + self.drone_radius, bx2 - self.drone_radius)
-            z1 = random.uniform(bz1, bz2 - self.drone_radius)
+            x1 = random.uniform(b[0] + self.drone_radius, b[1] - self.drone_radius)
+            y1 = random.uniform(b[0] + self.drone_radius, b[1] - self.drone_radius)
+            z1 = random.uniform(b[0] + self.drone_radius, b[1] - self.drone_radius)
             if self.check_collision(x1, y1, z1):
                 continue
             sigma = random.uniform(0.5, 2.0)
-            x2 = max(bx1 + self.drone_radius, min(bx2 - self.drone_radius, random.gauss(x1, sigma)))
-            y2 = max(bx1 + self.drone_radius, min(bx2 - self.drone_radius, random.gauss(y1, sigma)))
-            z2 = max(bz1, min(bz2 - self.drone_radius, random.gauss(z1, sigma)))
+            x2 = max(b[0]+self.drone_radius, min(b[1]-self.drone_radius, random.gauss(x1, sigma)))
+            y2 = max(b[0]+self.drone_radius, min(b[1]-self.drone_radius, random.gauss(y1, sigma)))
+            z2 = max(b[0]+self.drone_radius, min(b[1]-self.drone_radius, random.gauss(z1, sigma)))
             if self.check_collision(x2, y2, z2):
                 mx, my, mz = (x1+x2)/2, (y1+y2)/2, (z1+z2)/2
                 if not self.check_collision(mx, my, mz):
                     return [mx, my, mz]
-        return [random.uniform(bx1 + self.drone_radius, bx2 - self.drone_radius),
-                random.uniform(bx1 + self.drone_radius, bx2 - self.drone_radius),
-                random.uniform(bz1, bz2 - self.drone_radius)]
+        return [random.uniform(b[0]+self.drone_radius, b[1]-self.drone_radius),
+                random.uniform(b[0]+self.drone_radius, b[1]-self.drone_radius),
+                random.uniform(b[0]+self.drone_radius, b[1]-self.drone_radius)]
 
     def is_goal_reachable(self, node):
-        dist = math.dist([node["x"], node["y"], node["z"]],
-                         [self.goal["x"], self.goal["y"], self.goal["z"]])
+        dist = math.dist([node["x"], node["y"], node["z"]], [self.goal["x"], self.goal["y"], self.goal["z"]])
         if dist <= self.expand_dis * 1.5:
-            if self.is_line_safe([node["x"], node["y"], node["z"]],
-                                 [self.goal["x"], self.goal["y"], self.goal["z"]]):
+            if self.is_line_safe([node["x"], node["y"], node["z"]], [self.goal["x"], self.goal["y"], self.goal["z"]]):
                 return True
         return False
 
     def solve_multibias(self, max_iter=500):
         self.node_list = [self.start]
-        bx1, bx2 = self.bounds_xy
-        bz1, bz2 = self.bounds_z
+        b = self.bounds
         for _ in range(max_iter):
             p = random.random()
             if p < self.goal_bias:
@@ -130,9 +120,9 @@ class PlanningEngine3D:
             elif p < self.goal_bias + self.gaussian_bias:
                 rnd = self.get_gaussian_sample()
             else:
-                rnd = [random.uniform(bx1 + self.drone_radius, bx2 - self.drone_radius),
-                       random.uniform(bx1 + self.drone_radius, bx2 - self.drone_radius),
-                       random.uniform(bz1, bz2 - self.drone_radius)]
+                rnd = [random.uniform(b[0]+self.drone_radius, b[1]-self.drone_radius),
+                       random.uniform(b[0]+self.drone_radius, b[1]-self.drone_radius),
+                       random.uniform(b[0]+self.drone_radius, b[1]-self.drone_radius)]
 
             nearest = min(self.node_list, key=lambda n: (n["x"]-rnd[0])**2 + (n["y"]-rnd[1])**2 + (n["z"]-rnd[2])**2)
             dist = math.dist([nearest["x"], nearest["y"], nearest["z"]], rnd)
@@ -148,8 +138,7 @@ class PlanningEngine3D:
             }
             if self.check_collision(new_node["x"], new_node["y"], new_node["z"]):
                 continue
-            if not self.is_line_safe([nearest["x"], nearest["y"], nearest["z"]],
-                                     [new_node["x"], new_node["y"], new_node["z"]]):
+            if not self.is_line_safe([nearest["x"], nearest["y"], nearest["z"]], [new_node["x"], new_node["y"], new_node["z"]]):
                 continue
             self.node_list.append(new_node)
             if self.is_goal_reachable(new_node):
@@ -158,15 +147,14 @@ class PlanningEngine3D:
 
     def solve_rrt_star(self, max_iter=500):
         self.node_list = [self.start]
-        bx1, bx2 = self.bounds_xy
-        bz1, bz2 = self.bounds_z
+        b = self.bounds
         for _ in range(max_iter):
             if random.random() < 0.05:
                 rnd = [self.goal["x"], self.goal["y"], self.goal["z"]]
             else:
-                rnd = [random.uniform(bx1 + self.drone_radius, bx2 - self.drone_radius),
-                       random.uniform(bx1 + self.drone_radius, bx2 - self.drone_radius),
-                       random.uniform(bz1, bz2 - self.drone_radius)]
+                rnd = [random.uniform(b[0]+self.drone_radius, b[1]-self.drone_radius),
+                       random.uniform(b[0]+self.drone_radius, b[1]-self.drone_radius),
+                       random.uniform(b[0]+self.drone_radius, b[1]-self.drone_radius)]
 
             nearest = min(self.node_list, key=lambda n: (n["x"]-rnd[0])**2 + (n["y"]-rnd[1])**2 + (n["z"]-rnd[2])**2)
             dist = math.dist([nearest["x"], nearest["y"], nearest["z"]], rnd)
@@ -182,18 +170,14 @@ class PlanningEngine3D:
             }
             if self.check_collision(new_node["x"], new_node["y"], new_node["z"]):
                 continue
-            if not self.is_line_safe([nearest["x"], nearest["y"], nearest["z"]],
-                                     [new_node["x"], new_node["y"], new_node["z"]]):
+            if not self.is_line_safe([nearest["x"], nearest["y"], nearest["z"]], [new_node["x"], new_node["y"], new_node["z"]]):
                 continue
 
-            near_nodes = [n for n in self.node_list if (n["x"]-new_node["x"])**2 +
-                          (n["y"]-new_node["y"])**2 + (n["z"]-new_node["z"])**2 <= self.search_radius**2]
+            near_nodes = [n for n in self.node_list if (n["x"]-new_node["x"])**2 + (n["y"]-new_node["y"])**2 + (n["z"]-new_node["z"])**2 <= self.search_radius**2]
             for near in near_nodes:
-                d = math.dist([near["x"], near["y"], near["z"]],
-                              [new_node["x"], new_node["y"], new_node["z"]])
+                d = math.dist([near["x"], near["y"], near["z"]], [new_node["x"], new_node["y"], new_node["z"]])
                 if near["cost"] + d < new_node["cost"]:
-                    if self.is_line_safe([near["x"], near["y"], near["z"]],
-                                         [new_node["x"], new_node["y"], new_node["z"]]):
+                    if self.is_line_safe([near["x"], near["y"], near["z"]], [new_node["x"], new_node["y"], new_node["z"]]):
                         new_node["cost"] = near["cost"] + d
                         new_node["parent"] = near
 
@@ -201,11 +185,9 @@ class PlanningEngine3D:
             for near in near_nodes:
                 if near == new_node["parent"]:
                     continue
-                d = math.dist([new_node["x"], new_node["y"], new_node["z"]],
-                              [near["x"], near["y"], near["z"]])
+                d = math.dist([new_node["x"], new_node["y"], new_node["z"]], [near["x"], near["y"], near["z"]])
                 if new_node["cost"] + d < near["cost"]:
-                    if self.is_line_safe([new_node["x"], new_node["y"], new_node["z"]],
-                                         [near["x"], near["y"], near["z"]]):
+                    if self.is_line_safe([new_node["x"], new_node["y"], new_node["z"]], [near["x"], near["y"], near["z"]]):
                         near["parent"] = new_node
                         near["cost"] = new_node["cost"] + d
 
@@ -255,7 +237,6 @@ class DroneApp3D:
         self.sock = None
         self.data = {"start": [0,0,0], "goal": [5,5,3], "obs": [], "path": []}
         self.running = False
-        self.listening = False
 
         side = tk.Frame(root, width=300, bg="#2c3e50")
         side.pack(side=tk.LEFT, fill=tk.Y)
@@ -275,7 +256,7 @@ class DroneApp3D:
         radius_frame = tk.Frame(side, bg="#2c3e50")
         radius_frame.pack(fill='x', padx=20, pady=10)
         tk.Label(radius_frame, text="DRONE RADIUS (m)", bg="#2c3e50", fg="white", font=("Arial", 9, "bold")).pack(anchor="w")
-        self.radius_var = tk.StringVar(value="0.6")
+        self.radius_var = tk.StringVar(value="1.2")  # Dinaikkan dari 0.8 ke 1.2 agar path lebih aman dari tembok
         tk.Entry(radius_frame, textvariable=self.radius_var, width=10).pack(pady=2)
         tk.Label(radius_frame, text="(clearance from obstacles)", bg="#2c3e50", fg="#bdc3c7", font=("Arial", 7)).pack()
 
@@ -319,26 +300,15 @@ class DroneApp3D:
             raise ValueError(f"{name} harus memiliki 2 atau 3 elemen, got {len(point)}")
 
     def normalize_obstacle(self, obs):
-        x = float(obs.get("x", 0))
-        y = float(obs.get("y", 0))
-        z = float(obs.get("z", 0))
-        rot = float(obs.get("rot", 0))
-
-        width = 1.0; depth = 1.0; height = 1.0
-
-        if "width" in obs and "depth" in obs and "height" in obs:
-            width = float(obs["width"]); depth = float(obs["depth"]); height = float(obs["height"])
-        elif "size" in obs and isinstance(obs["size"], list) and len(obs["size"]) == 3:
-            width = float(obs["size"][0]); height = float(obs["size"][1]); depth = float(obs["size"][2])
-        elif "dimensions" in obs and isinstance(obs["dimensions"], list) and len(obs["dimensions"]) == 3:
-            width = float(obs["dimensions"][0]); height = float(obs["dimensions"][1]); depth = float(obs["dimensions"][2])
-        else:
-            if "w" in obs: width = float(obs["w"])
-            if "d" in obs: depth = float(obs["d"])
-            if "h" in obs: height = float(obs["h"])
-
-        print(f"[DEBUG] Obstacle: x={x}, y={y}, z={z}, w={width}, d={depth}, h={height}, rot={rot}")
-        return {"x": x, "y": y, "z": z, "width": width, "depth": depth, "height": height, "rot": rot}
+        return {
+            "x": float(obs.get("x", 0)),
+            "y": float(obs.get("y", 0)),
+            "z": float(obs.get("z", 0)),
+            "width": float(obs.get("width", 1)),
+            "depth": float(obs.get("depth", 1)),
+            "height": float(obs.get("height", 1)),
+            "rot": float(obs.get("rot", 0))
+        }
 
     def get_map(self):
         if not self.sock:
@@ -356,6 +326,8 @@ class DroneApp3D:
                 self.data['start'] = self.normalize_point(data['start'], "start")
             if 'goal' in data:
                 self.data['goal'] = self.normalize_point(data['goal'], "goal")
+                print(f"[INFO] Goal position diterima: {self.data['goal']}")
+
             if 'obstacles' in data and isinstance(data['obstacles'], list):
                 self.data['obs'] = [self.normalize_obstacle(o) for o in data['obstacles']]
             else:
@@ -364,9 +336,12 @@ class DroneApp3D:
             self.draw_world()
             self.btn_run.config(state="normal")
             self.lbl_metrics.config(text="Status: Map loaded (3D)")
+        except json.JSONDecodeError as e:
+            messagebox.showerror("JSON Error", f"Gagal parsing JSON:\n{e}\nData mentah: {raw[:200]}")
         except Exception as e:
             messagebox.showerror("Error", f"Gagal load map:\n{str(e)}")
-            import traceback; traceback.print_exc()
+            import traceback
+            traceback.print_exc()
 
     def draw_world(self, tree_edges=[]):
         self.ax.clear()
@@ -388,13 +363,7 @@ class DroneApp3D:
         
         if tree_edges:
             for e in tree_edges:
-                self.ax.plot3D(*zip(*e), color='orange', linewidth=1.5, alpha=0.7)
-            nodes = set()
-            for e in tree_edges:
-                nodes.add(e[0]); nodes.add(e[1])
-            if nodes:
-                xs, ys, zs = zip(*nodes)
-                self.ax.scatter(xs, ys, zs, c='gray', s=8, alpha=0.5)
+                self.ax.plot3D(*zip(*e), color='#bdc3c7', linewidth=0.5, alpha=0.5)
         
         start = self.data.get('start')
         if start and len(start)==3:
@@ -410,14 +379,20 @@ class DroneApp3D:
             lbl = 'Multi-Bias Path' if self.algo_var.get() == "multibias" else 'RRT* Path'
             self.ax.plot3D(p_np[:,0], p_np[:,1], p_np[:,2], color=c, linewidth=3, label=lbl)
         
-        self.ax.set_xlim(-10, 10); self.ax.set_ylim(-10, 10); self.ax.set_zlim(0, 10)
-        self.ax.set_xlabel('X'); self.ax.set_ylabel('Y'); self.ax.set_zlabel('Z')
+        bounds = (-10, 10)
+        self.ax.set_xlim(bounds)
+        self.ax.set_ylim(bounds)
+        self.ax.set_zlim(bounds)
+        self.ax.set_xlabel('X')
+        self.ax.set_ylabel('Y')
+        self.ax.set_zlabel('Z')
         self.ax.set_title(f"3D Environment ({len(self.data.get('obs', []))} Obstacles)")
         self.ax.legend(loc='upper right')
         self.canvas.draw_idle()
 
     def start_thread(self):
-        if self.running: return
+        if self.running:
+            return
         self.running = True
         self.btn_run.config(state="disabled")
         threading.Thread(target=self.solve, args=(int(self.iter_var.get()),), daemon=True).start()
@@ -426,14 +401,13 @@ class DroneApp3D:
         t0 = time.time()
         try:
             drone_radius = float(self.radius_var.get())
-            if drone_radius < 0.1: drone_radius = 0.1
+            if drone_radius < 0.1:
+                drone_radius = 0.1
         except:
-            drone_radius = 0.6
+            drone_radius = 1.2
         print(f"[INFO] Menggunakan drone radius = {drone_radius} m")
 
-        eng = PlanningEngine3D(self.data['start'], self.data['goal'], self.data['obs'],
-                               drone_radius=drone_radius,
-                               bounds_xy=(-10, 10), bounds_z=(0, 10))
+        eng = PlanningEngine3D(self.data['start'], self.data['goal'], self.data['obs'], drone_radius=drone_radius)
 
         if self.algo_var.get() == "rrtstar":
             algo_name = "RRT*"
@@ -449,10 +423,10 @@ class DroneApp3D:
 
         dt = time.time() - t0
         tree_edges = []
-        if len(eng.node_list) < 5000:
+        if len(eng.node_list) < 2000:
             for n in eng.node_list:
                 if n["parent"]:
-                    tree_edges.append(((n["x"], n["y"], n["z"]), (n["parent"]["x"], n["parent"]["y"], n["parent"]["z"])))
+                    tree_edges.append([(n["x"], n["y"], n["z"]), (n["parent"]["x"], n["parent"]["y"], n["parent"]["z"])])
 
         self.root.after(0, self.planning_done, path, tree_edges, dt, len(eng.node_list), algo_name, path is not None)
 
@@ -462,7 +436,7 @@ class DroneApp3D:
 
         if not success:
             self.lbl_metrics.config(text=f"Status: {algo_name} FAILED\nTime: {dt:.3f}s\nNodes: {nodes}")
-            messagebox.showwarning("Fail", "Path not found! Periksa start/goal dan radius.")
+            messagebox.showwarning("Fail", "Path not found!")
             self.draw_world(tree_edges)
             return
 
@@ -472,65 +446,10 @@ class DroneApp3D:
         self.lbl_metrics.config(text=f"[{algo_name} RESULT]\nTime: {dt:.3f}s\nCost: {cost:.2f}m\nNodes: {nodes}\nStatus: SUCCESS")
         self.btn_fly.config(state="normal")
 
-    def interpolate_path(self, path, step_size=0.5):
-        if not path or len(path) < 2:
-            return path
-        new_path = [path[0]]
-        for i in range(len(path)-1):
-            p1 = np.array(path[i]); p2 = np.array(path[i+1])
-            dist = np.linalg.norm(p2 - p1)
-            if dist <= step_size:
-                new_path.append(path[i+1])
-            else:
-                num_steps = int(np.ceil(dist / step_size))
-                for j in range(1, num_steps):
-                    t = j / num_steps
-                    interp = p1 + t * (p2 - p1)
-                    new_path.append(interp.tolist())
-                new_path.append(path[i+1])
-        return new_path
-
-    def listen_for_status(self):
-        self.listening = True
-        while self.listening:
-            try:
-                if not self.sock:
-                    break
-                self.sock.settimeout(0.5)
-                raw = self.sock.recv(1024).decode()
-                if raw:
-                    data = json.loads(raw)
-                    if data.get("status") == "LANDED":
-                        self.root.after(0, self.landing_done)
-                        break
-            except socket.timeout:
-                continue
-            except Exception as e:
-                print(f"Listener error: {e}")
-                break
-        self.listening = False
-
-    def landing_done(self):
-        self.lbl_metrics.config(text="Status: LANDED successfully")
-        self.btn_fly.config(state="disabled")
-        messagebox.showinfo("Info", "Drone telah mendarat di goal.")
-
     def fly(self):
         if self.data['path'] and self.sock:
             try:
-                drone_radius = float(self.radius_var.get())
-                smooth_path = self.interpolate_path(self.data['path'], step_size=0.5)
-                offset_z = 0.2
-                path_with_offset = [[p[0], p[1], p[2] + offset_z] for p in smooth_path]
-
-                msg = {"command": "START_SIM", "path": path_with_offset, "drone_radius": drone_radius}
-                self.sock.sendall(json.dumps(msg).encode())
-                self.lbl_metrics.config(text="Executing path... (waiting for landing)")
-                self.btn_fly.config(state="disabled")
-
-                if not self.listening:
-                    threading.Thread(target=self.listen_for_status, daemon=True).start()
-
+                self.sock.sendall(json.dumps({"command": "START_SIM", "path": self.data['path']}).encode())
             except Exception as e:
                 messagebox.showerror("Socket Error", f"Gagal mengirim perintah terbang: {e}")
 
@@ -540,10 +459,7 @@ class DroneApp3D:
                 self.sock.sendall(json.dumps({"command": "RESET"}).encode())
             except:
                 pass
-        self.listening = False
         self.data['path'] = []
-        self.btn_fly.config(state="normal" if self.data['path'] else "disabled")
-        self.lbl_metrics.config(text="Status: Reset")
         self.draw_world()
 
 if __name__ == "__main__":
